@@ -67,23 +67,31 @@ public class SecurityConfiguration {
                 .build();
     }
 
-    void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException {
+    void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
+            Authentication authentication) throws IOException {
         response.setContentType("application/json;charset=utf-8");
-        PrintWriter writer = response.getWriter();
-        User user = (User) authentication.getPrincipal();
-        AccountDTO accountDTO = accountService.query().eq("username", user.getUsername()).one();
-        String token = jwtUtils.createToken(user, accountDTO.getId(), user.getUsername());
-        AuthorizeVO vo = new AuthorizeVO(user.getUsername(), accountDTO.getRole(), token, jwtUtils.expireDate());
-        writer.write(RestBean.success(vo, "登录成功").asJSONString());
+        try {
+            PrintWriter writer = response.getWriter();
+            User user = (User) authentication.getPrincipal();
+            AccountDTO accountDTO = accountService.query().eq("username", user.getUsername()).one();
+            String token = jwtUtils.createToken(user, accountDTO.getId(), user.getUsername());
+            AuthorizeVO vo = new AuthorizeVO(user.getUsername(), accountDTO.getRole(), token, jwtUtils.expireDate());
+            writer.write(RestBean.success(vo, "登录成功").asJSONString());
+        } catch (Exception e) {
+            log.error("登录成功回调处理异常: ", e);
+            response.getWriter().write(RestBean.failure(500, "登录处理异常，请稍后重试").asJSONString());
+        }
     }
 
-    void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) throws IOException {
+    void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
+            AuthenticationException exception) throws IOException {
         response.setContentType("application/json;charset=utf-8");
         PrintWriter writer = response.getWriter();
         writer.write(RestBean.failure(400, exception.getMessage()).asJSONString());
     }
 
-    void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException {
+    void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
+            throws IOException {
         response.setContentType("application/json;charset=utf-8");
         PrintWriter writer = response.getWriter();
         String authorization = request.getHeader("Authorization");
@@ -95,13 +103,15 @@ public class SecurityConfiguration {
 
     }
 
-    void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException, ServletException {
+    void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException)
+            throws IOException, ServletException {
         response.setContentType("application/json;charset=utf-8");
         PrintWriter writer = response.getWriter();
         writer.write(RestBean.failure(403, accessDeniedException.getMessage()).asJSONString());
     }
 
-    void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
+    void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
+            throws IOException, ServletException {
         response.setContentType("application/json;charset=utf-8");
         PrintWriter writer = response.getWriter();
         writer.write(RestBean.failure(401, authException.getMessage()).asJSONString());

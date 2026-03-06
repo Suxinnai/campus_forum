@@ -77,11 +77,15 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     @Override
     public String createTopic(int uid, TopicCreateVO vo) {
-        if (vo.getContent() == null) return "文章内容不能为空";
-        if (!textLimitCheck(vo.getContent(), 20000)) return "文章字数过多, 请稍后再试";
-        if (!types.contains(vo.getType())) return "文章类型非法！";
-        if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_CREATE_COUNTER + uid, 3, 3600)) return "发文频繁, 请稍后再试";
-        TopicDTO dto = new TopicDTO(0, vo.getTitle(), vo.getContent().toJSONString(), vo.getType(), new Date(), uid);
+        if (vo.getContent() == null)
+            return "文章内容不能为空";
+        if (!textLimitCheck(vo.getContent(), 20000))
+            return "文章字数过多, 请稍后再试";
+        if (!types.contains(vo.getType()))
+            return "文章类型非法！";
+        if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_CREATE_COUNTER + uid, 3, 3600))
+            return "发文频繁, 请稍后再试";
+        TopicDTO dto = new TopicDTO(0, vo.getTitle(), vo.getContent().toJSONString(), vo.getType(), new Date(), uid, 0);
         if (this.save(dto)) {
             cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
             return null;
@@ -92,9 +96,12 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     @Override
     public String updateTopic(int uid, TopicUpdateVO vo) {
-        if (vo.getContent() == null) return "文章内容不能为空";
-        if (!textLimitCheck(vo.getContent(), 20000)) return "文章字数过多, 请稍后再试";
-        if (!types.contains(vo.getType())) return "文章类型非法！";
+        if (vo.getContent() == null)
+            return "文章内容不能为空";
+        if (!textLimitCheck(vo.getContent(), 20000))
+            return "文章字数过多, 请稍后再试";
+        if (!types.contains(vo.getType()))
+            return "文章类型非法！";
         baseMapper.update(null, Wrappers.<TopicDTO>update()
                 .eq("uid", uid)
                 .eq("id", vo.getId())
@@ -106,8 +113,10 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     @Override
     public String createComment(int uid, AddCommentVO vo) {
-        if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_COMMENT_COUNTER + uid, 2, 60)) return "发表评论频繁, 请稍后再试";
-        if (!textLimitCheck(JSONObject.parseObject(vo.getContent()), 2000)) return "评论内容字数过多, 请重新编辑";
+        if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_COMMENT_COUNTER + uid, 2, 60))
+            return "发表评论频繁, 请稍后再试";
+        if (!textLimitCheck(JSONObject.parseObject(vo.getContent()), 2000))
+            return "评论内容字数过多, 请重新编辑";
         TopicCommentDTO dto = new TopicCommentDTO();
         dto.setUid(uid);
         BeanUtils.copyProperties(vo, dto);
@@ -117,12 +126,16 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         AccountDTO accountDTO = accountMapper.selectById(uid);
         if (vo.getQuote() > 0) {
             TopicCommentDTO commentDTO = commentMapper.selectById(vo.getQuote());
-            System.out.println(topicDTO.getUid()+","+accountDTO.getId()+","+commentDTO.getUid());
+            System.out.println(topicDTO.getUid() + "," + accountDTO.getId() + "," + commentDTO.getUid());
             if (!Objects.equals(accountDTO.getId(), commentDTO.getUid())) {
-                notificationService.addNotification(commentDTO.getUid(), "您有新的评论回复", accountDTO.getUsername()+"回复了你发表的评论", "success", "/index/topic-detail/"+commentDTO.getTid());
+                notificationService.addNotification(commentDTO.getUid(), "您有新的评论回复",
+                        accountDTO.getUsername() + "回复了你发表的评论", "success",
+                        "/index/topic-detail/" + commentDTO.getTid());
             }
         } else if (!Objects.equals(accountDTO.getId(), topicDTO.getUid())) {
-            notificationService.addNotification(topicDTO.getUid(), "您有新的帖子评论回复", accountDTO.getUsername()+"回复了你发表的主题:"+topicDTO.getTitle(), "success", "/index/topic-detail/"+topicDTO.getId());
+            notificationService.addNotification(topicDTO.getUid(), "您有新的帖子评论回复",
+                    accountDTO.getUsername() + "回复了你发表的主题:" + topicDTO.getTitle(), "success",
+                    "/index/topic-detail/" + topicDTO.getId());
         }
         return null;
     }
@@ -135,11 +148,13 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             CommentVO vo = new CommentVO();
             BeanUtils.copyProperties(dto, vo);
             if (dto.getQuote() > 0) {
-                TopicCommentDTO commentDTO = commentMapper.selectOne(Wrappers.<TopicCommentDTO>query().eq("id", dto.getQuote()).orderByAsc("time"));
+                TopicCommentDTO commentDTO = commentMapper
+                        .selectOne(Wrappers.<TopicCommentDTO>query().eq("id", dto.getQuote()).orderByAsc("time"));
                 if (commentDTO != null) {
                     JSONObject object = JSONObject.parseObject(commentDTO.getContent());
                     StringBuilder builder = new StringBuilder();
-                    this.shortContent(object.getJSONArray("ops"), builder, ignore -> {});
+                    this.shortContent(object.getJSONArray("ops"), builder, ignore -> {
+                    });
                     vo.setQuote(builder.toString());
                 } else {
                     vo.setQuote("此评论已被删除");
@@ -160,7 +175,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     public List<TopicPreviewVO> listTopicByPage(int pageNumber, int type) {
         String key = Const.FORUM_TOPIC_PREVIEW_CACHE + pageNumber + ":" + type;
         List<TopicPreviewVO> voList = cacheUtils.getListFromCache(key, TopicPreviewVO.class);
-        if (voList != null) return voList;
+        if (voList != null)
+            return voList;
         Page<TopicDTO> page = Page.of(pageNumber + 1, 10);
         if (type == 0) {
             baseMapper.selectPage(page, Wrappers.<TopicDTO>query().orderByDesc("time"));
@@ -168,7 +184,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             baseMapper.selectPage(page, Wrappers.<TopicDTO>query().eq("type", type).orderByDesc("time"));
         }
         List<TopicDTO> list = page.getRecords();
-        if (list.isEmpty()) return null;
+        if (list.isEmpty())
+            return null;
         voList = list.stream().map(this::resolveToPreview).toList();
         cacheUtils.saveListToCache(key, voList, 60);
         return voList;
@@ -182,7 +199,6 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return vo;
         }).toList();
     }
-
 
     @Override
     public List<TopicTopVO> listTopTopics() {
@@ -225,6 +241,7 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     private final Map<String, Boolean> map = new HashMap<>();
     ScheduledExecutorService service = Executors.newScheduledThreadPool(2);
+
     private void saveInteractSchedule(String type) {
         if (!map.getOrDefault(type, false)) {
             map.put(type, true);
@@ -245,8 +262,10 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
                 else
                     uncheck.add(Interact.parseInteract(k.toString(), type));
             });
-            if (!check.isEmpty()) baseMapper.addInteract(check, type);
-            if (!uncheck.isEmpty()) baseMapper.deleteInteract(uncheck, type);
+            if (!check.isEmpty())
+                baseMapper.addInteract(check, type);
+            if (!uncheck.isEmpty())
+                baseMapper.deleteInteract(uncheck, type);
             template.delete(type);
         }
     }
@@ -263,7 +282,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     private TopicPreviewVO resolveToPreview(TopicDTO dto) {
         AccountDTO account = accountMapper.selectById(dto.getUid());
-        TopicPreviewVO vo = new TopicPreviewVO(dto.getId(), dto.getType(), dto.getTitle(), null, null, dto.getTime(), dto.getUid(), account.getUsername(), account.getAvatar(),
+        TopicPreviewVO vo = new TopicPreviewVO(dto.getId(), dto.getType(), dto.getTitle(), null, null, dto.getTime(),
+                dto.getUid(), account.getUsername(), account.getAvatar(),
                 baseMapper.interactCount(dto.getId(), "like"),
                 baseMapper.interactCount(dto.getId(), "collect"));
         List<String> images = new LinkedList<>();
@@ -279,9 +299,10 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         for (Object op : ops) {
             Object insert = JSONObject.from(op).get("insert");
             if (insert instanceof String text) {
-                if (previewText.length() >= 300) continue;
+                if (previewText.length() >= 300)
+                    continue;
                 previewText.append(text);
-            } else if (insert instanceof Map<?,?> map) {
+            } else if (insert instanceof Map<?, ?> map) {
                 Optional.ofNullable(map.get("image")).ifPresent(imagesHandler);
             }
         }
@@ -291,7 +312,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         long length = 0;
         for (Object ops : object.getJSONArray("ops")) {
             length += JSONObject.from(ops).getString("insert").length();
-            if (length > max) return false;
+            if (length > max)
+                return false;
         }
         return true;
     }

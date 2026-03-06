@@ -27,7 +27,8 @@ public class FlowLimitFilter extends HttpFilter {
     StringRedisTemplate template;
 
     @Override
-    protected void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws IOException, ServletException {
+    protected void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
         String ip = request.getRemoteAddr();
         if (isBan(ip)) {
             chain.doFilter(request, response);
@@ -43,13 +44,21 @@ public class FlowLimitFilter extends HttpFilter {
     }
 
     private boolean isBan(String ip) {
-        if (Boolean.TRUE.equals(template.hasKey(Const.FLOW_LIMIT_BAN + ip))) return false;
-        return limitPeriodCheck(ip);
+        try {
+            if (Boolean.TRUE.equals(template.hasKey(Const.FLOW_LIMIT_BAN + ip)))
+                return false;
+            return limitPeriodCheck(ip);
+        } catch (Exception e) {
+            // Redis 不可用时直接放行
+            log.warn("Redis 不可用, 跳过限流检查: {}", e.getMessage());
+            return true;
+        }
     }
 
     private boolean limitPeriodCheck(String ip) {
         if (Boolean.TRUE.equals(template.hasKey(Const.FLOW_LIMIT_COUNTER + ip))) {
-            Long increment = Optional.ofNullable(template.opsForValue().increment(Const.FLOW_LIMIT_COUNTER + ip)).orElse(0L);
+            Long increment = Optional.ofNullable(template.opsForValue().increment(Const.FLOW_LIMIT_COUNTER + ip))
+                    .orElse(0L);
             if (increment > 30) {
                 template.opsForValue().set(Const.FLOW_LIMIT_BAN + ip, "", 30, TimeUnit.SECONDS);
                 log.info("{}地址也许正在压测网站, 请注意!", ip);

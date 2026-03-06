@@ -1,26 +1,26 @@
 import axios from "axios";
-import {ElMessage} from "element-plus";
+import { ElMessage } from "element-plus";
 import router from "@/router/index.js";
 
-const defaultUrl = "http://192.168.5.1:8080"
+const defaultUrl = "http://localhost:8080"
 
 const tokenAndExpire = "tokenAndExpire"
 
 const defaultFailure = (message, code, url) => {
-    ElMessage.warning({message:message, plain:true});
+    ElMessage.warning({ message: message, plain: true });
 }
 
 const defaultError = (message) => {
-    ElMessage.error({message:message, plain:true})
+    ElMessage.error({ message: message, plain: true })
 }
 
 const getToken = () => {
     const token = sessionStorage.getItem(tokenAndExpire) || localStorage.getItem(tokenAndExpire);
     if (!token) return null;
     const tokenObj = JSON.parse(token);
-    if (tokenObj.expire < new Date()) {
+    if (new Date(tokenObj.expire) < new Date()) {
         deleteToken();
-        ElMessage.warning({message:"登录状态过期, 请重新登录", plain:true});
+        ElMessage.warning({ message: "登录状态过期, 请重新登录", plain: true });
         return null;
     }
     return tokenObj.token;
@@ -33,7 +33,7 @@ const deleteToken = () => {
 
 const storeToken = (token, remember, expire) => {
     console.log(`${token}+${expire}`)
-    const auth = {token: token, expire: expire};
+    const auth = { token: token, expire: expire };
     if (remember) {
         localStorage.setItem(tokenAndExpire, JSON.stringify(auth));
     } else {
@@ -60,7 +60,7 @@ const get = (url, success, failure = defaultFailure) => {
 }
 
 const doPost = (url, data, header, success, failure = defaultFailure, error = defaultError) => {
-    axios.post(defaultUrl + url, data, { headers: header}).then((res) => {
+    axios.post(defaultUrl + url, data, { headers: header }).then((res) => {
         if (res.data.code === 200) {
             success(res.data.data)
         } else {
@@ -83,10 +83,10 @@ const login = (username, password, remember) => {
         username: username,
         password: password
     }, {
-        "Content-Type" : "application/x-www-form-urlencoded"
+        "Content-Type": "application/x-www-form-urlencoded"
     }, (data) => {
         storeToken(data.token, remember, data.expireTime);
-        ElMessage.success({message: `欢迎用户${data.username}登录成功`, plain: true})
+        ElMessage.success({ message: `欢迎用户${data.username}登录成功`, plain: true })
         router.push("/index")
     })
 }
@@ -108,4 +108,4 @@ const isLogin = () => {
     return getToken()
 }
 
-export {doGet, doPost, login, logout, askCodeForType, isLogin, get, post, getToken}
+export { doGet, doPost, login, logout, askCodeForType, isLogin, get, post, getToken }

@@ -77,30 +77,22 @@ watch(() => topics.type, () => {
 })
 
 const weather = reactive({
-  location:{},
+  location: {},
   now: {},
   hourly: {},
   success: false
 })
 
-navigator.geolocation.getCurrentPosition((position) => {
-  const longitude = position.coords.longitude;
-  const latitude = position.coords.latitude;
-  console.log(`${longitude}','${latitude}`)
-  get(`/api/forum/weather?longitude=${longitude}&latitude=${latitude}`, (data) => {
-    Object.assign(weather, data)
-    weather.success = true;
-  })
-}, (err) => {
-  console.info(err)
-  ElMessage.warning({message:"位置信息获取超时", plain:true})
-  get("api/forum/weather?longitude=116.40529&latitude=39.90499", data => {
-    Object.assign(weather, data)
-    weather.success = true;
-  })
-}, {
-  timeout: 10000,
-  enableHighAccuracy: true
+// 直接使用重庆坐标获取天气，无需浏览器地理位置授权
+get("/api/forum/weather?longitude=106.55&latitude=29.56", (data) => {
+  Object.assign(weather, data)
+  weather.success = true;
+}, () => {
+  // 后端天气接口失败时，显示静态兜底数据
+  weather.location = { name: '重庆', adm2: '重庆', adm1: '重庆市', country: '中国' }
+  weather.now = { text: '多云', temp: '18', feelsLike: '17', windDir: '东北风', windScale: '2', humidity: '65', icon: '104' }
+  weather.hourly = []
+  weather.success = true;
 })
 </script>
 
@@ -211,15 +203,18 @@ navigator.geolocation.getCurrentPosition((position) => {
           <el-divider style="margin: 10px 0"/>
         </div>
         <div style="display: grid;grid-template-columns: repeat(2, 1fr);grid-gap: 10px;margin-top: 10px;">
-          <div class="friend-link">
-            <el-image src="https://element-plus.org/images/sponsors/mele-banner.png"/>
-          </div>
-          <div class="friend-link">
-            <el-image src="https://element-plus.org/images/sponsors/vform-banner.png"/>
-          </div>
-          <div class="friend-link">
-            <el-image src="https://element-plus.org/images/sponsors/jnpfsoft.jpg"/>
-          </div>
+          <a class="friend-link" href="https://www.edu.cn" target="_blank">
+            <div class="friend-link-text">🎓 中国教育网</div>
+          </a>
+          <a class="friend-link" href="https://www.cnki.net" target="_blank">
+            <div class="friend-link-text">📚 中国知网</div>
+          </a>
+          <a class="friend-link" href="https://github.com" target="_blank">
+            <div class="friend-link-text">💻 GitHub</div>
+          </a>
+          <a class="friend-link" href="https://element-plus.org" target="_blank">
+            <div class="friend-link-text">🎨 Element Plus</div>
+          </a>
         </div>
       </div>
     </div>
@@ -322,6 +317,21 @@ navigator.geolocation.getCurrentPosition((position) => {
 .friend-link {
   border-radius: 5px;
   overflow: hidden;
+  background: #f0f2f5;
+  text-decoration: none;
+  color: inherit;
+  transition: .3s;
+
+  &:hover {
+    opacity: 0.7;
+    cursor: pointer;
+  }
+}
+
+.friend-link-text {
+  padding: 10px;
+  font-size: 13px;
+  text-align: center;
 }
 .create-topic {
   background-color: #efefef;

@@ -1,28 +1,38 @@
+server:
+  port: 8080
+
 spring:
   minio:
-    endpoint: "http://192.168.5.1:9000"
+    endpoint: "http://localhost:9000"
     username: "minioadmin"
     password: "minioadmin"
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
-    password:
-    url: jdbc:mysql://localhost:3306/jwt_database
+    password: a1234568
+    url: jdbc:mysql://localhost:3306/campus_forum?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
   security:
     jwt:
       key: key_for_me
   mail:
     host: smtp.163.com
-    username: Fcoming@163.com
-    password: OHHZSXCCCRRXILJJ
+    username: sunoixy@163.com
+    password: KHb9qdjXFphXVtKe
   rabbitmq:
     addresses: localhost
-    username: admin
-    password: admin
+    username: guest
+    password: guest
     virtual-host: /
   weather:
-    key: ee2127f1d84a4ff7b6500c24c4cad6c0
+    key: 0341da776d6d4a50adba1f75c3aa3905
   servlet:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto

@@ -1,0 +1,71 @@
+package org.example.finishedbackend.controller;
+
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.example.finishedbackend.entity.DTO.ResourceDTO;
+import org.example.finishedbackend.entity.RestBean;
+import org.example.finishedbackend.entity.VO.response.ResourceVO;
+import org.example.finishedbackend.service.ResourceService;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/resource")
+public class ResourceController {
+
+    @Resource
+    ResourceService resourceService;
+
+    /**
+     * 上传资源
+     */
+    @PostMapping("/upload")
+    public RestBean<String> upload(@RequestParam("file") MultipartFile file,
+            @RequestParam String title,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String description,
+            @RequestAttribute("id") int id) {
+        if (file.getSize() > 1024 * 1024 * 50) {
+            return RestBean.failure(400, "文件大小不允许超过 50MB");
+        }
+        log.info("用户 {} 正在上传资源: {}", id, title);
+        String result = resourceService.uploadResource(file, title, category, description, id);
+        return result != null ? RestBean.success(result) : RestBean.failure(400, "资源上传失败");
+    }
+
+    /**
+     * 分页查询资源列表
+     */
+    @GetMapping("/list")
+    public RestBean<List<ResourceVO>> list(@RequestParam(defaultValue = "1") int page,
+            @RequestParam(required = false) String category) {
+        List<ResourceVO> list = resourceService.listResources(page, category);
+        return RestBean.success(list, "获取资源列表成功");
+    }
+
+    /**
+     * 下载资源
+     */
+    @GetMapping("/download/{id}")
+    public void download(@PathVariable Integer id, HttpServletResponse response) {
+        try {
+            ResourceDTO dto = resourceService.downloadResource(id, response.getOutputStream());
+            if (dto == null) {
+                response.setStatus(404);
+                return;
+            }
+            response.setContentType("application/octet-stream");
+            response.setHeader("Content-Disposition",
+                    "attachment;filename=" + URLEncoder.encode(dto.getFileName(), StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.error("资源下载失败：{}", e.getMessage());
+            response.setStatus(500);
+        }
+    }
+}

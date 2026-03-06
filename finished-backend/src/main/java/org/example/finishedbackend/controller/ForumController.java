@@ -15,6 +15,7 @@ import org.example.finishedbackend.entity.VO.request.TopicUpdateVO;
 import org.example.finishedbackend.entity.VO.response.*;
 import org.example.finishedbackend.service.TopicService;
 import org.example.finishedbackend.service.WeatherService;
+import org.example.finishedbackend.service.RecommendService;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,6 +32,9 @@ public class ForumController {
     @Resource
     TopicService topic;
 
+    @Resource
+    RecommendService recommendService;
+
     @GetMapping("/weather")
     public RestBean<WeatherVO> weather(double longitude, double latitude) {
         WeatherVO vo = service.fetchWeather(longitude, latitude);
@@ -39,19 +43,21 @@ public class ForumController {
 
     @GetMapping("/types")
     public RestBean<List<TopicTypeVO>> listTypes() {
-        return RestBean.success(topic.listTypes().stream().map(type -> new TopicTypeVO(type.getId(), type.getName(), type.getDesc(), type.getColor())).toList(), "获取typeList成功");
+        return RestBean.success(topic.listTypes().stream()
+                .map(type -> new TopicTypeVO(type.getId(), type.getName(), type.getDesc(), type.getColor())).toList(),
+                "获取typeList成功");
     }
 
     @PostMapping("/create-topic")
     public RestBean<Void> createTopic(@RequestAttribute("id") int id,
-                                      @RequestBody @Valid TopicCreateVO vo) {
+            @RequestBody @Valid TopicCreateVO vo) {
         String s = topic.createTopic(id, vo);
         return s == null ? RestBean.success("创建帖子成功") : RestBean.failure(400, s);
     }
 
     @GetMapping("/list-topic")
     public RestBean<List<TopicPreviewVO>> listTopic(@RequestParam @Min(0) int page,
-                                                    @RequestParam @Min(0) int type) {
+            @RequestParam @Min(0) int type) {
         List<TopicPreviewVO> voList = topic.listTopicByPage(page, type);
         return voList != null ? RestBean.success(voList, null) : RestBean.failure(400, "已经到头了~");
     }
@@ -63,47 +69,58 @@ public class ForumController {
 
     @GetMapping("/topic")
     public RestBean<TopicDetailVO> topic(@RequestParam @Min(0) int tid,
-                                         @RequestAttribute("id") int id) {
+            @RequestAttribute("id") int id) {
+        // 记录浏览行为（权重 +1）
+        recommendService.recordBehavior(id, tid, "view");
         return RestBean.success(topic.getTopic(tid, id), null);
     }
 
     @GetMapping("/interact")
     public RestBean<Void> interact(@RequestParam @Min(0) int tid,
-                                   @RequestParam @Pattern(regexp = "(like|collect)") String type,
-                                   @RequestParam boolean state,
-                                   @RequestAttribute("id") int id) {
+            @RequestParam @Pattern(regexp = "(like|collect)") String type,
+            @RequestParam boolean state,
+            @RequestAttribute("id") int id) {
         topic.interact(new Interact(tid, id, new Date(), type), state);
+        // 记录点赞/收藏行为
+        if (state) {
+            recommendService.recordBehavior(id, tid, type);
+        }
         return RestBean.success(null);
     }
 
     @GetMapping("/collects")
     public RestBean<List<TopicPreviewVO>> collect(@RequestAttribute("id") int id) {
-        return RestBean.success(topic.listTopicCollects(id),null);
+        return RestBean.success(topic.listTopicCollects(id), null);
     }
 
     @PostMapping("/update-topic")
     public RestBean<Void> updateTopic(@RequestAttribute("id") int id,
-                                      @RequestBody @Valid TopicUpdateVO vo) {
+            @RequestBody @Valid TopicUpdateVO vo) {
         String s = topic.updateTopic(id, vo);
         return s == null ? RestBean.success("帖子更新成功") : RestBean.failure(400, s);
     }
 
     @PostMapping("/add-comment")
     public RestBean<Void> addComment(@RequestAttribute("id") int id,
-                                     @RequestBody @Valid AddCommentVO vo) {
+            @RequestBody @Valid AddCommentVO vo) {
         String s = topic.createComment(id, vo);
-        return s == null ? RestBean.success(null) : RestBean.failure(400, s);
+        if (s == null) {
+            // 记录评论行为（权重 +4）
+            recommendService.recordBehavior(id, vo.getTid(), "comment");
+            return RestBean.success(null);
+        }
+        return RestBean.failure(400, s);
     }
 
     @GetMapping("/comments")
     public RestBean<List<CommentVO>> comments(@RequestParam @Min(0) int tid,
-                                              @RequestParam @Min(0) int page) {
+            @RequestParam @Min(0) int page) {
         return RestBean.success(topic.comments(tid, page), null);
     }
 
     @GetMapping("/delete-comment")
     public RestBean<Void> deleteComment(@RequestParam @Min(1) int id,
-                                        @RequestAttribute("id") int uid) {
+            @RequestAttribute("id") int uid) {
         topic.deleteComment(uid, id);
         return RestBean.success(null);
     }

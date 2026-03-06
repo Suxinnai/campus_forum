@@ -150,25 +150,25 @@ const dark = ref(useDark())
                     帖子广场
                   </template>
                 </el-menu-item>
-                <el-menu-item>
+                <el-menu-item index="/index/lost-found">
                   <template #title>
                     <el-icon><Bell/></el-icon>
                     失物招领
                   </template>
                 </el-menu-item>
-                <el-menu-item>
+                <el-menu-item index="/index/activity">
                   <template #title>
                     <el-icon><Notification/></el-icon>
                     校园活动
                   </template>
                 </el-menu-item>
-                <el-menu-item>
+                <el-menu-item index="/index/confession">
                   <template #title>
                     <el-icon><Umbrella/></el-icon>
                     表白墙
                   </template>
                 </el-menu-item>
-                <el-menu-item>
+                <el-menu-item index="/index/exam-info">
                   <template #title>
                     <el-icon><school/></el-icon>
                     海文考研
@@ -181,34 +181,34 @@ const dark = ref(useDark())
                   <el-icon><Position/></el-icon>
                   <span><b>探索与发现</b></span>
                 </template>
-                <el-menu-item index="2-1">
+                <el-menu-item index="/index/resource">
+                  <template #title>
+                    <el-icon><Files/></el-icon>
+                    资源共享
+                  </template>
+                </el-menu-item>
+                <el-menu-item index="/index/stat">
+                  <template #title>
+                    <el-icon><DataLine/></el-icon>
+                    数据可视化
+                  </template>
+                </el-menu-item>
+                <el-menu-item index="/index/grade">
                   <template #title>
                     <el-icon><Document/></el-icon>
                     成绩查询
                   </template>
                 </el-menu-item>
-                <el-menu-item>
-                  <template #title>
-                    <el-icon><Files/></el-icon>
-                    班级课程表
-                  </template>
-                </el-menu-item>
-                <el-menu-item>
+                <el-menu-item index="/index/notice">
                   <template #title>
                     <el-icon><Monitor/></el-icon>
                     教务通知
                   </template>
                 </el-menu-item>
-                <el-menu-item>
+                <el-menu-item index="/index/library">
                   <template #title>
                     <el-icon><Collection/></el-icon>
                     在线图书馆
-                  </template>
-                </el-menu-item>
-                <el-menu-item>
-                  <template #title>
-                    <el-icon><DataLine/></el-icon>
-                    预约教室
                   </template>
                 </el-menu-item>
               </el-sub-menu>

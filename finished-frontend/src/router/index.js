@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import {getToken, isLogin} from "@/net/api.js";
+import { getToken, isLogin } from "@/net/api.js";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -49,10 +49,46 @@ const router = createRouter({
           path: "user-setting",
           name: "user-setting",
           component: () => import("@/views/setting/UserSetting.vue")
-        },{
+        }, {
           path: "privacy-setting",
           name: "privacy-setting",
           component: () => import("@/views/setting/PrivacySetting.vue")
+        }, {
+          path: "resource",
+          name: "resource",
+          component: () => import("@/views/forum/ResourceView.vue")
+        }, {
+          path: "stat",
+          name: "stat",
+          component: () => import("@/views/forum/StatView.vue")
+        }, {
+          path: "lost-found",
+          name: "lost-found",
+          component: () => import("@/views/forum/LostFoundView.vue")
+        }, {
+          path: "activity",
+          name: "activity",
+          component: () => import("@/views/forum/ActivityView.vue")
+        }, {
+          path: "confession",
+          name: "confession",
+          component: () => import("@/views/forum/ConfessionView.vue")
+        }, {
+          path: "exam-info",
+          name: "exam-info",
+          component: () => import("@/views/forum/ExamInfoView.vue")
+        }, {
+          path: "grade",
+          name: "grade",
+          component: () => import("@/views/forum/GradeView.vue")
+        }, {
+          path: "notice",
+          name: "notice",
+          component: () => import("@/views/forum/NoticeView.vue")
+        }, {
+          path: "library",
+          name: "library",
+          component: () => import("@/views/forum/LibraryView.vue")
         }
 
       ]
@@ -63,9 +99,9 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const loginStatus = getToken()
-  if (to.name.startsWith("welcome-") && loginStatus) {
+  if (to.name && to.name.startsWith("welcome-") && loginStatus) {
     next("/index")
-  } else if (to.name.startsWith("index") && !loginStatus) {
+  } else if (to.fullPath.startsWith("/index") && !loginStatus) {
     next("/")
   } else {
     next();

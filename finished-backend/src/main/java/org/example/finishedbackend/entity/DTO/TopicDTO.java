@@ -19,4 +19,5 @@ public class TopicDTO {
     Integer type;
     Date time;
     Integer uid;
+    Integer top;
 }
