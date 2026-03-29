@@ -245,70 +245,78 @@ function deleteComment(id) {
 <style lang="less" scoped>
 .comment-quote {
     font-size: 13px;
-    color: grey;
-    background-color: rgba(94, 94, 94, 0.2);
-    padding: 10px;
-    margin-top: 10px;
-    border-radius: 5px;
+    color: var(--el-text-color-secondary);
+    background-color: var(--el-fill-color-light);
+    border-left: 3px solid var(--el-color-primary-light-5);
+    padding: 12px 16px;
+    margin-top: 12px;
+    border-radius: 4px 8px 8px 4px;
 }
 
 .add-comment {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 40px;
-  height: 40px;
+  bottom: 40px;
+  right: 40px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  font-size: 18px;
-  line-height: 44px;
-  color: var(--el-color-primary);
-  background-color: var(--el-bg-color-overlay);
-  text-align: center;
-  box-shadow: var(--el-box-shadow-lighter);
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background-color: var(--el-color-primary);
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.4);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  z-index: 100;
 
   &:hover {
     cursor: pointer;
-    background-color: var(--el-border-color-extra-light);
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 6px 24px rgba(64, 158, 255, 0.6);
   }
 }
+
 .topic-page {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px 0;
-
+  gap: 16px;
+  padding: 20px 0;
 }
 
 .topic-main {
   display: flex;
-  border-radius: 7px;
+  border-radius: var(--card-radius);
   margin: 0 auto;
   background-color: var(--el-bg-color);
   width: 800px;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
 
   .topic-main-left {
     width: 200px;
-    padding: 10px;
+    padding: 20px;
     text-align: center;
-    border-right: solid 1px var(--el-border-color);
+    background-color: var(--el-fill-color-extra-light);
+    border-right: 1px solid var(--el-border-color-light);
 
     .desc {
       font-size: 12px;
-      color: grey;
+      color: var(--el-text-color-secondary);
+      line-height: 1.6;
     }
   }
 
   .topic-main-right {
-    padding: 20px;
+    padding: 24px 30px;
     width: 600px;
     display: flex;
     flex-direction: column;
 
-
     .topic-content {
-      font-size: 14px;
-      opacity: 0.9;
-      line-height: 22px;
+      font-size: 15px;
+      color: var(--el-text-color-primary);
+      line-height: 1.8;
       flex: 1;
     }
   }

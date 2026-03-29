@@ -2,13 +2,12 @@
 import {get, logout} from "@/net/api.js";
 import {useCounterStore} from "@/stores/counter.js"
 import {computed, reactive, ref} from "vue";
-import BB from '@/assets/images/bilibili.png'
 import {
   Back,
   Bell,
   ChatDotSquare, Check, Collection, DataLine,
   Document, Files,
-  Location, Lock, Message, Monitor, Moon, Notification, Operation,
+  Location, Lock, Message, Moon, Notification, Operation,
   Position,
   School, Search, Sunny,
   Umbrella, User
@@ -60,15 +59,20 @@ const getAvatar = computed(() => {
 });
 
 const dark = ref(useDark())
+
+const sidebarCollapse = ref(false)
 </script>
 
 <template>
   <div class="main-content" v-loading="loading" element-loading-text="正在加载信息, 请稍后...">
     <el-container style="height: 100%">
       <el-header class="main-content-header">
-         <el-image class="logo" :src="BB"></el-image>
-        <div style="flex: 1;padding: 0 20px;text-align: center">
-          <el-input v-model="searchInput.text" style="width: 100%;max-width: 500px" placeholder="搜索论坛相关内容...">
+        <div class="logo-area" @click="router.push('/index')">
+          <el-icon class="logo-icon" :size="28" color="#0d4a75"><School /></el-icon>
+          <span class="logo-text">青研社</span>
+        </div>
+        <div class="header-search">
+          <el-input v-model="searchInput.text" class="search-input" placeholder="搜索论坛相关内容..." clearable>
             <template #prefix>
               <el-icon><Search/></el-icon>
             </template>
@@ -84,7 +88,7 @@ const dark = ref(useDark())
         </div>
         <div class="user-info">
           <el-switch
-              style="--el-switch-on-color: #424242;margin-right: 30px;"
+              class="theme-switch"
               v-model="dark" :active-action-icon="Moon" :inactive-action-icon="Sunny"/>
           <el-popover placement="bottom" :width="350" trigger="click">
             <template #reference>
@@ -117,7 +121,7 @@ const dark = ref(useDark())
             <div>{{ store.user.email }}</div>
           </div>
           <el-dropdown>
-            <el-avatar :src="getAvatar"/>
+            <el-avatar :src="getAvatar" :size="36"/>
             <template #dropdown>
               <el-dropdown-item @click="router.push('/index/user-setting')">
                 <el-icon><Operation/></el-icon>
@@ -136,13 +140,19 @@ const dark = ref(useDark())
         </div>
       </el-header>
       <el-container>
-        <el-aside width="230px">
+        <el-aside :width="sidebarCollapse ? '64px' : '220px'" class="sidebar">
           <el-scrollbar style="height: calc(100vh - 55px)">
-            <el-menu router style="min-height: calc(100vh - 55px)" :default-active="$route.path" :default-openeds="['1', '2', '3']">
-              <el-sub-menu index="1" >
+            <el-menu
+                router
+                :collapse="sidebarCollapse"
+                :default-active="$route.path"
+                :default-openeds="['1', '2', '3']"
+                class="sidebar-menu"
+            >
+              <el-sub-menu index="1">
                 <template #title>
                   <el-icon><Location/></el-icon>
-                  <span><b>校园论坛</b></span>
+                  <span>校园社区</span>
                 </template>
                 <el-menu-item index="/index">
                   <template #title>
@@ -152,7 +162,7 @@ const dark = ref(useDark())
                 </el-menu-item>
                 <el-menu-item index="/index/lost-found">
                   <template #title>
-                    <el-icon><Bell/></el-icon>
+                    <el-icon><Search/></el-icon>
                     失物招领
                   </template>
                 </el-menu-item>
@@ -168,18 +178,11 @@ const dark = ref(useDark())
                     表白墙
                   </template>
                 </el-menu-item>
-                <el-menu-item index="/index/exam-info">
-                  <template #title>
-                    <el-icon><school/></el-icon>
-                    海文考研
-                    <el-tag style="margin-left: 10px" size="small">合作机构</el-tag>
-                  </template>
-                </el-menu-item>
               </el-sub-menu>
               <el-sub-menu index="2">
                 <template #title>
                   <el-icon><Position/></el-icon>
-                  <span><b>探索与发现</b></span>
+                  <span>学习工具</span>
                 </template>
                 <el-menu-item index="/index/resource">
                   <template #title>
@@ -215,7 +218,7 @@ const dark = ref(useDark())
               <el-sub-menu index="3">
                 <template #title>
                   <el-icon><Operation/></el-icon>
-                  <span><b>个人设置</b></span>
+                  <span>个人设置</span>
                 </template>
                 <el-menu-item index="/index/user-setting">
                   <template #title>
@@ -232,6 +235,12 @@ const dark = ref(useDark())
               </el-sub-menu>
             </el-menu>
           </el-scrollbar>
+          <div class="sidebar-toggle" @click="sidebarCollapse = !sidebarCollapse">
+            <el-icon :size="14">
+              <Back v-if="!sidebarCollapse"/>
+              <Position v-else/>
+            </el-icon>
+          </div>
         </el-aside>
         <el-main class="main-content-page">
           <el-scrollbar style="height: calc(100vh - 55px)">
@@ -245,7 +254,7 @@ const dark = ref(useDark())
       </el-container>
     </el-container>
   </div>
-</template >
+</template>
 
 <style lang="less" scoped>
 .notification-item {
@@ -271,51 +280,153 @@ const dark = ref(useDark())
 
 .main-content-page {
   padding: 0;
-  background-color: #f7f8fa;
+  background-color: #f5f6f8;
 }
 
 .dark .main-content-page {
-  background-color: #212225;
+  background-color: #1a1a1e;
 }
 
 .main-content {
   height: 100vh;
   width: 100vw;
 }
+
+/* ===== Header ===== */
 .main-content-header {
   border-bottom: 1px solid var(--el-border-color);
   height: 55px;
   display: flex;
   align-items: center;
   box-sizing: border-box;
+  background: var(--ice-bg-gradient);
+  padding: 0 20px;
 
-  .logo {
-    height: 32px;
+  .logo-area {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: opacity 0.2s;
+
+    &:hover { opacity: 0.85; }
+
+    .logo-icon {
+      font-size: 26px;
+      margin-right: 8px;
+    }
+
+    .logo-text {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0d4a75;
+      letter-spacing: 1px;
+    }
+  }
+
+  .header-search {
+    flex: 1;
+    padding: 0 30px;
+    display: flex;
+    justify-content: center;
+
+    .search-input {
+      width: 100%;
+      max-width: 480px;
+    }
+  }
+
+  .theme-switch {
+    --el-switch-on-color: #424242;
+    margin-right: 20px;
   }
 
   .user-info {
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    flex-shrink: 0;
 
-    .el-avatar:hover {
+    .el-avatar {
       cursor: pointer;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      transition: border-color 0.2s;
+
+      &:hover { border-color: #fff; }
     }
   }
 
   .profile {
     text-align: right;
-    margin-right: 20px;
+    margin-right: 15px;
 
     :first-child {
-      font-size: 18px;
-      font-weight: bold;
+      font-size: 15px;
+      font-weight: 600;
       line-height: 20px;
+      color: #0d4a75;
     }
 
     :last-child {
       font-size: 10px;
-      color: gray;
+      color: rgba(13, 74, 117, 0.7);
+    }
+  }
+
+  .notification {
+    color: #0d4a75;
+
+    &:hover {
+      color: #8ad8ff;
+    }
+  }
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+  position: relative;
+  transition: width 0.25s ease;
+  border-right: 1px solid var(--el-border-color);
+
+  .sidebar-menu {
+    border-right: none;
+    min-height: calc(100vh - 55px - 36px);
+
+    :deep(.el-sub-menu__title) {
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    :deep(.el-menu-item) {
+      font-size: 13px;
+      border-radius: 6px;
+      margin: 2px 8px;
+      height: 42px;
+
+      &.is-active {
+        background: linear-gradient(135deg, #667eea20, #764ba220);
+        color: #667eea;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .sidebar-toggle {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-top: 1px solid var(--el-border-color);
+    color: var(--el-text-color-secondary);
+    transition: background-color 0.2s, color 0.2s;
+
+    &:hover {
+      background-color: var(--el-fill-color-light);
+      color: var(--el-text-color-primary);
     }
   }
 }

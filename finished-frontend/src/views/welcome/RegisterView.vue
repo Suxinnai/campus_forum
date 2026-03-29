@@ -96,35 +96,173 @@ const register = (formRef) => {
 </script>
 
 <template>
-  <div style="margin-top: 160px">
-    <h2 style="text-align: center">注册</h2>
-    <div style="margin-top: 50px">
+  <div class="register-page">
+    <div class="header">
+      <div class="logo-text">青研社</div>
+      <h2 class="title">注册新账号</h2>
+      <div class="subtitle">填写以下信息加入我们的社区</div>
+    </div>
+
+    <div class="form-container">
       <el-form :model="form" :rules="rules" ref="formRef">
-        <el-form-item prop="email" style="margin: 0 20px" ><el-input v-model="form.email" placeholder="邮箱" :prefix-icon="Message"/></el-form-item>
-        <el-form-item prop="username" style="margin: 25px 20px" ><el-input v-model="form.username" placeholder="用户名" :prefix-icon="User"/></el-form-item>
-        <el-form-item prop="password" style="margin: 25px 20px" ><el-input v-model="form.password" type="password" show-password="show-password" placeholder="密码" :prefix-icon="Lock"/></el-form-item>
-        <el-form-item prop="repeat_password" style="margin: 25px 20px" ><el-input v-model="form.repeat_password" type="password" show-password="show-password" placeholder="重复密码" :prefix-icon="Lock"/></el-form-item>
-        <el-row style="margin: 10px 20px">
-          <el-col :span="14">
-            <el-form-item prop="code"><el-input v-model="form.code" maxlength="6" placeholder="验证码" :prefix-icon="Key"/></el-form-item>
+        <el-form-item prop="email">
+          <el-input v-model="form.email" placeholder="电子邮箱地址" :prefix-icon="Message"/>
+        </el-form-item>
+        
+        <el-row :gutter="10">
+          <el-col :span="16">
+            <el-form-item prop="code">
+              <el-input v-model="form.code" maxlength="6" placeholder="邮箱验证码" :prefix-icon="Key"/>
+            </el-form-item>
           </el-col>
-          <el-col :span="8" :offset="1">
-            <el-button type="success" @click="askCode" :disabled="codeTime !== 0 && /^([A-Za-z0-9_\-\.])+\@([A-Za-z0-9_\-\.])+\.([A-Za-z]{2,4})$/.test(form.email)">{{ codeTime > 0 ? `请稍等${codeTime}秒重试` : "发送验证码" }}</el-button>
+          <el-col :span="8">
+            <el-form-item>
+              <el-button 
+                type="primary" 
+                class="code-btn"
+                @click="askCode" 
+                :disabled="codeTime !== 0 || !form.email">
+                {{ codeTime > 0 ? `${codeTime}s` : "获取验证码" }}
+              </el-button>
+            </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item><el-button style="margin: 0 80px;width: 100%" type="warning" plain @click="register(formRef)">注册</el-button></el-form-item>
-        <el-form-item>
-          <div style="margin: 0 auto">
-            <div @click="router.push('/')">已有账号?
-              <el-link style="margin-bottom: 3px">立即登录</el-link>
-            </div>
-          </div>
+
+        <el-form-item prop="username">
+          <el-input v-model="form.username" placeholder="建议使用真实姓名" :prefix-icon="User"/>
+        </el-form-item>
+        
+        <el-form-item prop="password">
+          <el-input v-model="form.password" type="password" show-password placeholder="设置登录密码" :prefix-icon="Lock"/>
+        </el-form-item>
+        
+        <el-form-item prop="repeat_password">
+          <el-input v-model="form.repeat_password" type="password" show-password placeholder="再次输入密码" :prefix-icon="Lock"/>
         </el-form-item>
       </el-form>
+
+      <div class="actions">
+        <el-button type="primary" class="register-btn" @click="register(formRef)">立即注册</el-button>
+        <div class="footer-links">
+          <span>已有账号?</span>
+          <el-link type="primary" @click="router.push('/')">立即登录</el-link>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+:deep(.el-input__wrapper) {
+  background-color: #f9fbff;
+  box-shadow: 0 0 0 1px #e4e7ed inset !important;
+  border-radius: 12px;
+  padding: 0 16px;
+  height: 48px;
+  transition: all 0.3s;
+}
 
+:deep(.el-input__wrapper.is-focus) {
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #0d4a75 inset !important;
+}
+
+.register-page {
+  width: 100%;
+  animation: slide-up 0.6s ease-out;
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.header {
+  margin-bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.logo-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #8c98a9;
+  letter-spacing: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.logo-text::before,
+.logo-text::after {
+  content: "";
+  display: block;
+  width: 32px;
+  height: 1px;
+  background-color: #e2e8f0;
+}
+
+.title {
+  font-size: 30px;
+  font-weight: 900;
+  color: #1a1a1a;
+  margin: 0 0 6px 0;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #8c98a9;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.form-container {
+  margin-bottom: 20px;
+}
+
+.code-btn {
+  width: 100%;
+  padding: 10px 0;
+  height: 48px;
+  border-radius: 12px;
+  background-color: #0d4a75;
+  border-color: #0d4a75;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.register-btn {
+  width: 100%;
+  height: 50px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0d4a75 0%, #1a5a8a 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(13, 74, 117, 0.2);
+  transition: all 0.3s;
+}
+
+.register-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(13, 74, 117, 0.3);
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  font-size: 14px;
+  color: #666;
+}
 </style>

@@ -74,10 +74,6 @@ const router = createRouter({
           name: "confession",
           component: () => import("@/views/forum/ConfessionView.vue")
         }, {
-          path: "exam-info",
-          name: "exam-info",
-          component: () => import("@/views/forum/ExamInfoView.vue")
-        }, {
           path: "grade",
           name: "grade",
           component: () => import("@/views/forum/GradeView.vue")

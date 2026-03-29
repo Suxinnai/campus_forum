@@ -228,139 +228,158 @@ get("/api/forum/weather?longitude=106.55&latitude=29.56", (data) => {
   font-size: 14px;
   display: flex;
   justify-content: space-between;
-  transition: .3s;
+  align-items: center;
+  transition: all .3s;
+  padding: 8px 12px;
+  border-radius: 8px;
 
   &:hover {
     cursor: pointer;
-    opacity: 0.5;
+    background-color: var(--el-fill-color-light);
+    color: var(--el-color-primary);
   }
 }
+
 .top-topic {
   display: flex;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background-color .3s;
+  align-items: center;
 
-  div:first-of-type{
+  div:first-of-type {
     font-size: 14px;
     margin-left: 10px;
-    font-weight: bold;
-    opacity: 0.8;
-    transition: color .3s;
-
-    &:hover {
-      color: grey;
-    }
+    font-weight: 600;
+    opacity: 0.9;
+    color: var(--el-text-color-primary);
   }
 
   div:nth-of-type(2) {
     flex: 1;
-    color: grey;
-    font-size: 13px;
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
     text-align: right;
   }
 
   &:hover {
     cursor: pointer;
+    background-color: var(--el-fill-color-lighter);
   }
 }
 
 .type-select-card {
-  background-color: #f5f5f5;
-  padding: 2px 7px;
-  font-size: 14px;
-  border-radius: 3px;
+  background-color: var(--el-fill-color-light);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 20px;
   box-sizing: border-box;
-  transition: background-color .3s;
+  transition: all .3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  color: var(--el-text-color-regular);
+  display: flex;
+  align-items: center;
 
   &.active {
-    border: solid 1px #ead4c4;
+    background-color: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
   }
 
   &:hover {
     cursor: pointer;
-    background-color: #dadada;
+    background-color: var(--el-fill-color);
+    transform: translateY(-1px);
   }
 }
 
 .topic-card {
-  padding: 15px;
-  transition: scale .3s;
+  padding: 20px;
 
   &:hover {
-    scale: 1.015;
     cursor: pointer;
   }
 
   .topic-content {
-    font-size: 13px;
-    color: grey;
-    margin: 5px 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--el-text-color-regular);
+    margin: 12px 0;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .topic-image {
     width: 100%;
-    height: 100%;
-    max-height: 110px;
-    border-radius: 5px;
+    height: 120px;
+    border-radius: 8px;
+    transition: transform 0.3s;
+    
+    &:hover {
+      transform: scale(1.03);
+    }
   }
 }
 
 .info-text {
   display: flex;
   justify-content: space-between;
-  color: grey;
+  color: var(--el-text-color-secondary);
   font-size: 14px;
+  padding: 4px 0;
 }
+
 .friend-link {
-  border-radius: 5px;
+  border-radius: 8px;
   overflow: hidden;
-  background: #f0f2f5;
+  background: var(--el-fill-color-light);
   text-decoration: none;
   color: inherit;
-  transition: .3s;
+  transition: all .3s;
 
   &:hover {
-    opacity: 0.7;
+    background: var(--el-fill-color);
+    transform: translateY(-2px);
     cursor: pointer;
   }
 }
 
 .friend-link-text {
-  padding: 10px;
+  padding: 12px;
   font-size: 13px;
   text-align: center;
+  font-weight: 500;
 }
+
 .create-topic {
-  background-color: #efefef;
-  border-radius: 5px;
-  height: 40px;
-  color: grey;
+  background-color: var(--el-fill-color-light);
+  border-radius: 20px;
+  height: 44px;
+  color: var(--el-text-color-secondary);
   font-size: 14px;
-  line-height: 40px;
-  padding: 0 10px;
+  line-height: 44px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.3s, transform 0.2s;
 
   &:hover {
     cursor: pointer;
+    background-color: var(--el-fill-color);
+  }
+  
+  .el-icon {
+    margin-right: 6px;
   }
 }
 
 .dark {
-  .create-topic {
-    background-color: #212225;
-  }
-
   .type-select-card {
-    background-color: #282828;
-
     &.active {
-      border: solid 1px #64594b;
-    }
-
-    &:hover {
-      background-color: #5e5e5e;
+      background-color: var(--el-color-primary-light-3);
+      color: #fff;
     }
   }
 }

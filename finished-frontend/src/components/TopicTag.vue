@@ -20,11 +20,13 @@ defineProps({
 
 <style scoped>
 .topic-type {
-  display: inline-block;
-  border: solid 0.5px grey;
-  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  font-weight: 600;
+  border-radius: 12px;
   font-size: 12px;
-  padding: 0 5px;
-  height: 18px;
+  padding: 0 8px;
+  height: 22px;
 }
 </style>
