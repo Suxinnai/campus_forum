@@ -10,7 +10,7 @@ import '@/assets/index.css'
 
 import axios from "axios";
 
-axios.defaults.baseURL = "http://192.168.5.1:8080"
+axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080"
 
 const app = createApp(App)
 

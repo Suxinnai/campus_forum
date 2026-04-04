@@ -1,11 +1,6 @@
 <script setup>
 import {ref, reactive, onMounted} from 'vue'
-import {get, post, getToken} from "@/net/api.js"
-import {ElMessage} from "element-plus"
-import {Upload, Download, Folder, Document, DocumentCopy, Ticket, More} from "@element-plus/icons-vue"
-import axios from "axios"
-
-const defaultUrl = "http://localhost:8080"
+import {get, post, getToken, baseURL} from "@/net/api.js"
 
 const resourceList = ref([])
 const loading = ref(false)
@@ -70,7 +65,7 @@ function handleUpload(param) {
   formData.append('category', uploadForm.category || '其他')
   formData.append('description', uploadForm.description || '')
 
-  axios.post(defaultUrl + '/api/resource/upload', formData, {
+  axios.post(baseURL + '/api/resource/upload', formData, {
     headers: {
       'Authorization': `Bearer ${getToken()}`,
       'Content-Type': 'multipart/form-data'
@@ -89,13 +84,27 @@ function handleUpload(param) {
 }
 
 function downloadResource(id, fileName) {
-  const link = document.createElement('a')
-  link.href = `${defaultUrl}/api/resource/download/${id}`
-  link.setAttribute('download', fileName)
-  link.target = '_blank'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  loading.value = true;
+  axios.get(`${baseURL}/api/resource/download/${id}`, {
+    responseType: 'blob',
+    headers: {
+      'Authorization': `Bearer ${getToken()}`
+    }
+  }).then(res => {
+    const blob = new Blob([res.data]);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }).catch(err => {
+    ElMessage.error('下载失败，请重试');
+  }).finally(() => {
+    loading.value = false;
+  });
 }
 
 function formatFileSize(bytes) {

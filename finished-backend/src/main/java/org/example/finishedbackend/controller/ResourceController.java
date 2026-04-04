@@ -53,8 +53,9 @@ public class ResourceController {
      * 下载资源
      */
     @GetMapping("/download/{id}")
-    public void download(@PathVariable Integer id, HttpServletResponse response) {
+    public void download(@PathVariable Integer id, @RequestAttribute("id") int uid, HttpServletResponse response) {
         try {
+            log.info("用户 {} 正在下载资源 ID: {}", uid, id);
             ResourceDTO dto = resourceService.downloadResource(id, response.getOutputStream());
             if (dto == null) {
                 response.setStatus(404);

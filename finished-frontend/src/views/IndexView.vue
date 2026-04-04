@@ -1,21 +1,15 @@
 <script setup>
-import {get, logout} from "@/net/api.js";
+import {get, del, logout} from "@/net/api.js";
 import {useCounterStore} from "@/stores/counter.js"
 import {computed, reactive, ref} from "vue";
 import {
-  Back,
-  Bell,
-  ChatDotSquare, Check, Collection, DataLine,
-  Document, Files,
-  Location, Lock, Message, Moon, Notification, Operation,
-  Position,
-  School, Search, Sunny,
-  Umbrella, User
-} from "@element-plus/icons-vue";
+  Bell, Check, MapPin, Tent, SearchCode, Heart, BookOpen, FileText,
+  LineChart, BellRing, BookMarked, Settings, Mail, LogOut, PanelLeftClose,
+  Sun, Moon, Hash, User, Search
+} from "lucide-vue-next";
 import router from "@/router/index.js";
 import axios from "axios";
 import LightCard from "@/components/LightCard.vue";
-import {ElMessage} from "element-plus";
 import {useDark} from "@vueuse/core";
 
 const store = useCounterStore()
@@ -42,14 +36,14 @@ const loadNotification = () => {
 loadNotification()
 
 function confirmNotification(id, url) {
-  get(`/api/notification/delete?id=${id}`, () => {
+  del(`/api/notification/delete?id=${id}`, () => {
     loadNotification()
     window.open(url);
   })
 }
 
 function deleteAllNotification() {
-  get("/api/notification/delete-all", () => {
+  del("/api/notification/delete-all", () => {
     loadNotification()
   })
 }
@@ -60,39 +54,36 @@ const getAvatar = computed(() => {
 
 const dark = ref(useDark())
 
-const sidebarCollapse = ref(false)
+const sidebarCollapse = ref(false);
 </script>
 
 <template>
   <div class="main-content" v-loading="loading" element-loading-text="正在加载信息, 请稍后...">
-    <el-container style="height: 100%">
-      <el-header class="main-content-header">
-        <div class="logo-area" @click="router.push('/index')">
-          <el-icon class="logo-icon" :size="28" color="#0d4a75"><School /></el-icon>
-          <span class="logo-text">青研社</span>
+    <el-container style="height: 100vh">
+      <el-header class="main-content-header glass-effect">
+        <div class="header-left">
+          <div class="logo-area" @click="router.push('/index')">
+            <img src="/favicon.png" alt="Logo" class="logo-image" />
+            <span class="logo-text">青研社</span>
+          </div>
         </div>
-        <div class="header-search">
-          <el-input v-model="searchInput.text" class="search-input" placeholder="搜索论坛相关内容..." clearable>
+        
+        <div class="header-center">
+          <el-input v-model="searchInput.text" class="global-search-input" placeholder=" 全局搜索... (帖子/用户/活动)" clearable>
             <template #prefix>
               <el-icon><Search/></el-icon>
             </template>
-            <template #append>
-              <el-select style="width: 120px" v-model="searchInput.type">
-                <el-option value="1" label="帖子广场"/>
-                <el-option value="2" label="校园活动"/>
-                <el-option value="3" label="表白墙"/>
-                <el-option value="4" label="教务通知"/>
-              </el-select>
-            </template>
           </el-input>
         </div>
-        <div class="user-info">
-          <el-switch
-              class="theme-switch"
-              v-model="dark" :active-action-icon="Moon" :inactive-action-icon="Sunny"/>
+        
+        <div class="header-right">
+          <div class="theme-switch-btn" @click="dark = !dark">
+            <el-icon><Moon v-if="dark"/><Sun v-else/></el-icon>
+          </div>
+          
           <el-popover placement="bottom" :width="350" trigger="click">
             <template #reference>
-              <el-badge style="margin-right: 15px" is-dot :hidden="!notification.length">
+              <el-badge is-dot :hidden="!notification.length">
                 <div class="notification">
                   <el-icon><Bell/></el-icon>
                   <div style="font-size: 10px">消息</div>
@@ -106,7 +97,7 @@ const sidebarCollapse = ref(false)
                   <el-tag :type="item.type">消息</el-tag>&nbsp;
                   <span style="font-weight: bold">{{item.title}}</span>
                 </div>
-                <el-drawer style="margin: 7px 0 3px 0"/>
+                <el-divider style="margin: 7px 0 3px 0"/>
                 <div style="font-size: 13px;color: grey">
                   {{item.content}}
                 </div>
@@ -116,139 +107,120 @@ const sidebarCollapse = ref(false)
               <el-button size="small" type="info" :icon="Check" @click="deleteAllNotification" style="width: 100%" plain>清除全部未读消息</el-button>
             </div>
           </el-popover>
-          <div class="profile">
-            <div>{{ store.user.username }}</div>
-            <div>{{ store.user.email }}</div>
-          </div>
+          
           <el-dropdown>
-            <el-avatar :src="getAvatar" :size="36"/>
+            <el-avatar :src="getAvatar"/>
             <template #dropdown>
               <el-dropdown-item @click="router.push('/index/user-setting')">
-                <el-icon><Operation/></el-icon>
-                个人设置
+                <el-icon><Settings/></el-icon>个人设置
               </el-dropdown-item>
               <el-dropdown-item>
-                <el-icon><Message/></el-icon>
-                消息列表
+                <el-icon><Mail/></el-icon>消息列表
               </el-dropdown-item>
               <el-dropdown-item @click="logout" divided>
-                <el-icon><Back/></el-icon>
-                退出登录
+                <el-icon><LogOut/></el-icon>退出登录
               </el-dropdown-item>
             </template>
           </el-dropdown>
         </div>
       </el-header>
+      
       <el-container>
-        <el-aside :width="sidebarCollapse ? '64px' : '220px'" class="sidebar">
-          <el-scrollbar style="height: calc(100vh - 55px)">
+        <el-aside :width="sidebarCollapse ? '72px' : '230px'" class="sidebar">
+          <el-scrollbar style="height: calc(100vh - 60px)">
             <el-menu
                 router
                 :collapse="sidebarCollapse"
-                :default-active="$route.path"
+                :default-active="router.currentRoute.value.path"
                 :default-openeds="['1', '2', '3']"
                 class="sidebar-menu"
             >
+              <el-menu-item index="/index">
+                <template #title>
+                  <el-icon><Hash/></el-icon>
+                  <span>帖子广场</span>
+                </template>
+              </el-menu-item>
+
               <el-sub-menu index="1">
                 <template #title>
-                  <el-icon><Location/></el-icon>
-                  <span>校园社区</span>
+                  <el-icon><MapPin/></el-icon>
+                  <span>校园探索</span>
                 </template>
-                <el-menu-item index="/index">
+                <el-menu-item index="/index/activity">
                   <template #title>
-                    <el-icon><ChatDotSquare/></el-icon>
-                    帖子广场
+                    <el-icon><Tent/></el-icon>校园活动
                   </template>
                 </el-menu-item>
                 <el-menu-item index="/index/lost-found">
                   <template #title>
-                    <el-icon><Search/></el-icon>
-                    失物招领
-                  </template>
-                </el-menu-item>
-                <el-menu-item index="/index/activity">
-                  <template #title>
-                    <el-icon><Notification/></el-icon>
-                    校园活动
+                    <el-icon><SearchCode/></el-icon>失物招领
                   </template>
                 </el-menu-item>
                 <el-menu-item index="/index/confession">
                   <template #title>
-                    <el-icon><Umbrella/></el-icon>
-                    表白墙
+                    <el-icon><Heart/></el-icon>表白墙
                   </template>
                 </el-menu-item>
               </el-sub-menu>
+
               <el-sub-menu index="2">
                 <template #title>
-                  <el-icon><Position/></el-icon>
-                  <span>学习工具</span>
+                  <el-icon><BookOpen/></el-icon>
+                  <span>学习资源</span>
                 </template>
                 <el-menu-item index="/index/resource">
                   <template #title>
-                    <el-icon><Files/></el-icon>
-                    资源共享
-                  </template>
-                </el-menu-item>
-                <el-menu-item index="/index/stat">
-                  <template #title>
-                    <el-icon><DataLine/></el-icon>
-                    数据可视化
+                    <el-icon><FileText/></el-icon>学习资料
                   </template>
                 </el-menu-item>
                 <el-menu-item index="/index/grade">
                   <template #title>
-                    <el-icon><Document/></el-icon>
-                    成绩查询
+                    <el-icon><LineChart/></el-icon>成绩查询
                   </template>
                 </el-menu-item>
                 <el-menu-item index="/index/notice">
                   <template #title>
-                    <el-icon><Monitor/></el-icon>
-                    教务通知
+                    <el-icon><BellRing/></el-icon>教务通知
                   </template>
                 </el-menu-item>
-                <el-menu-item index="/index/library">
-                  <template #title>
-                    <el-icon><Collection/></el-icon>
-                    在线图书馆
-                  </template>
-                </el-menu-item>
+
               </el-sub-menu>
+
               <el-sub-menu index="3">
                 <template #title>
-                  <el-icon><Operation/></el-icon>
-                  <span>个人设置</span>
+                  <el-icon><User/></el-icon>
+                  <span>个人中心</span>
                 </template>
                 <el-menu-item index="/index/user-setting">
                   <template #title>
-                    <el-icon><User/></el-icon>
-                    个人信息设置
+                    <el-icon><Settings/></el-icon>个人设置
                   </template>
                 </el-menu-item>
-                <el-menu-item index="/index/privacy-setting">
+                <el-menu-item index="/index/stat">
                   <template #title>
-                    <el-icon><Lock/></el-icon>
-                    账号安全设置
+                    <el-icon><LineChart/></el-icon>数据统计
                   </template>
                 </el-menu-item>
               </el-sub-menu>
             </el-menu>
           </el-scrollbar>
-          <div class="sidebar-toggle" @click="sidebarCollapse = !sidebarCollapse">
-            <el-icon :size="14">
-              <Back v-if="!sidebarCollapse"/>
-              <Position v-else/>
-            </el-icon>
+          <div class="collapse-btn" @click="sidebarCollapse = !sidebarCollapse">
+            <el-icon><PanelLeftClose/></el-icon>
           </div>
         </el-aside>
+        
         <el-main class="main-content-page">
-          <el-scrollbar style="height: calc(100vh - 55px)">
+          <el-scrollbar style="height: calc(100vh - 60px)">
             <router-view v-slot="{ Component }">
               <transition name="el-fade-in-linear" mode="out-in">
-                <component :is="Component" style="height: 100%" />
+                <component :is="Component" style="min-height: calc(100vh - 120px)" />
               </transition>
             </router-view>
+            <div class="global-footer">
+              <p>© {{ new Date().getFullYear() }} 青研社 (Qingyan Society). 版权所有.</p>
+              <p>连接·发现·成长 — 你的校园数字新生活</p>
+            </div>
           </el-scrollbar>
         </el-main>
       </el-container>
@@ -257,102 +229,138 @@ const sidebarCollapse = ref(false)
 </template>
 
 <style lang="less" scoped>
-.notification-item {
-  transition: 0.3s;
-
-  &:hover {
-    cursor: pointer;
-    opacity: 0.7;
-  }
-}
-
-.notification {
-  font-size: 22px;
-  line-height: 14px;
-  text-align: center;
-  transition: 0.3s;
-
-  &:hover {
-    color: grey;
-    cursor: pointer;
-  }
-}
-
-.main-content-page {
-  padding: 0;
-  background-color: #f5f6f8;
-}
-
-.dark .main-content-page {
-  background-color: #1a1a1e;
-}
-
 .main-content {
   height: 100vh;
   width: 100vw;
 }
 
+.main-content-page {
+  padding: 0;
+  background-color: var(--el-bg-color-page);
+}
+
+/* 高斯模糊卡片及整体设计 */
+.glass-effect {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+html.dark .glass-effect {
+  background-color: rgba(30, 30, 30, 0.7) !important;
+}
+
 /* ===== Header ===== */
 .main-content-header {
-  border-bottom: 1px solid var(--el-border-color);
-  height: 55px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  height: 60px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   box-sizing: border-box;
-  background: var(--ice-bg-gradient);
-  padding: 0 20px;
+  padding: 0 24px;
+  z-index: 10;
+  
+  .header-left {
+    width: 250px;
+    display: flex;
+    align-items: center;
+  }
+  
+  .header-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .header-right {
+    width: 250px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
 
   .logo-area {
     display: flex;
     align-items: center;
     cursor: pointer;
-    flex-shrink: 0;
     transition: opacity 0.2s;
-
-    &:hover { opacity: 0.85; }
-
-    .logo-icon {
-      font-size: 26px;
-      margin-right: 8px;
+    
+    .logo-image {
+      width: 28px;
+      height: 28px;
+      margin-right: 12px;
+      border-radius: 8px; /* 更圆润的logo */
+      object-fit: cover;
     }
-
+    
     .logo-text {
       font-size: 18px;
-      font-weight: 700;
-      color: #0d4a75;
+      font-weight: 800;
+      color: var(--el-text-color-primary);
       letter-spacing: 1px;
     }
+    &:hover { opacity: 0.8; }
   }
 
-  .header-search {
-    flex: 1;
-    padding: 0 30px;
-    display: flex;
-    justify-content: center;
+  .global-search-input {
+    width: 100%;
+    max-width: 600px;
+    height: 40px;
 
-    .search-input {
-      width: 100%;
-      max-width: 480px;
+    :deep(.el-input__wrapper) {
+      background-color: var(--el-fill-color-light) !important;
+      border-radius: 20px !important;
+      box-shadow: none !important;
+      padding-left: 18px;
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      border: 1px solid transparent;
+
+      &:hover { background-color: var(--el-fill-color) !important; }
+      &.is-focus {
+        background-color: rgba(255,255,255,0.95) !important;
+        border-color: var(--el-color-primary);
+        box-shadow: 0 0 0 4px var(--el-color-primary-light-8) !important;
+      }
+    }
+    
+    :deep(.el-input__inner) {
+      font-size: 14px;
+      font-weight: 500;
     }
   }
 
-  .theme-switch {
-    --el-switch-on-color: #424242;
+  .theme-switch-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    font-size: 18px;
+    color: var(--el-text-color-primary);
+    background-color: transparent;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
     margin-right: 20px;
+
+    &:hover {
+      background-color: var(--el-fill-color);
+      color: var(--el-color-primary);
+      transform: scale(1.1);
+    }
   }
 
-  .user-info {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    flex-shrink: 0;
+  .el-avatar {
+    cursor: pointer;
+    border: 2px solid var(--el-border-color-lighter);
+    transition: all 0.2s;
+    border-radius: 50%; /* 保证头像纯圆形或顺应高斯模糊设定 */
 
-    .el-avatar {
-      cursor: pointer;
-      border: 2px solid rgba(255, 255, 255, 0.5);
-      transition: border-color 0.2s;
-
-      &:hover { border-color: #fff; }
+    &:hover { 
+      border-color: var(--el-color-primary);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
   }
 
@@ -361,23 +369,34 @@ const sidebarCollapse = ref(false)
     margin-right: 15px;
 
     :first-child {
-      font-size: 15px;
-      font-weight: 600;
-      line-height: 20px;
-      color: #0d4a75;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--el-text-color-primary);
     }
 
     :last-child {
-      font-size: 10px;
-      color: rgba(13, 74, 117, 0.7);
+      font-size: 11px;
+      color: var(--el-text-color-secondary);
+      margin-top: 2px;
     }
   }
 
   .notification {
-    color: #0d4a75;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--el-text-color-regular);
+    transition: all 0.2s;
+    cursor: pointer;
+    margin-right: 20px;
+
+    .el-icon {
+      font-size: 20px;
+    }
 
     &:hover {
-      color: #8ad8ff;
+      color: var(--el-color-primary);
     }
   }
 }
@@ -385,49 +404,99 @@ const sidebarCollapse = ref(false)
 /* ===== Sidebar ===== */
 .sidebar {
   position: relative;
-  transition: width 0.25s ease;
-  border-right: 1px solid var(--el-border-color);
+  transition: width 0.3s var(--transition-cubic);
+  border-right: none;
+  background-color: var(--el-bg-color);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.02);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
 
   .sidebar-menu {
     border-right: none;
-    min-height: calc(100vh - 55px - 36px);
+    padding: 12px 10px;
 
     :deep(.el-sub-menu__title) {
       font-weight: 600;
-      font-size: 13px;
+      font-size: 13.5px;
+      height: 50px;
     }
 
     :deep(.el-menu-item) {
-      font-size: 13px;
-      border-radius: 6px;
-      margin: 2px 8px;
-      height: 42px;
+      font-size: 13.5px;
+      border-radius: 8px;
+      margin: 4px 0;
+      height: 44px;
+      color: var(--el-text-color-regular);
+      transition: all 0.2s ease-in-out;
+      position: relative;
+      
+      &:hover {
+        background-color: var(--el-fill-color-light);
+        color: var(--el-color-primary);
+      }
 
       &.is-active {
-        background: linear-gradient(135deg, #667eea20, #764ba220);
-        color: #667eea;
+        background-color: var(--el-color-primary-light-9);
+        color: var(--el-color-primary);
         font-weight: 600;
+        
+        &::before {
+          content: '';
+          position: absolute;
+          left: -10px;
+          top: 15%;
+          height: 70%;
+          width: 4px;
+          background-color: var(--el-color-primary);
+          border-radius: 0 4px 4px 0;
+        }
       }
     }
   }
 
-  .sidebar-toggle {
-    position: absolute;
-    bottom: 0;
-    width: 100%;
-    height: 36px;
+  .collapse-btn {
+    height: 40px;
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: center;
+    color: var(--el-text-color-regular);
     cursor: pointer;
-    border-top: 1px solid var(--el-border-color);
-    color: var(--el-text-color-secondary);
-    transition: background-color 0.2s, color 0.2s;
-
+    border-top: 1px solid var(--el-border-color-lighter);
+    transition: all 0.2s;
+    
     &:hover {
       background-color: var(--el-fill-color-light);
-      color: var(--el-text-color-primary);
+      color: var(--el-color-primary);
     }
   }
+}
+
+.notification-item {
+  transition: .3s;
+  &:hover {
+    cursor: pointer;
+    opacity: 0.7;
+    background-color: var(--el-fill-color-light);
+  }
+}
+</style>
+
+<style scoped>
+.global-footer {
+  text-align: center;
+  padding: 30px 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.8;
+  margin-top: 20px;
+  background-color: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+}
+html.dark .global-footer {
+  background-color: rgba(30, 30, 30, 0.4);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 </style>

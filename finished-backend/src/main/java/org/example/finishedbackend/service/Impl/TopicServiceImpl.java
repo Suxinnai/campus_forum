@@ -280,6 +280,13 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         return target;
     }
 
+    @Override
+    public TopicPreviewVO resolvePreviewById(int tid) {
+        TopicDTO dto = this.getById(tid);
+        if (dto == null) return null;
+        return resolveToPreview(dto);
+    }
+
     private TopicPreviewVO resolveToPreview(TopicDTO dto) {
         AccountDTO account = accountMapper.selectById(dto.getUid());
         TopicPreviewVO vo = new TopicPreviewVO(dto.getId(), dto.getType(), dto.getTitle(), null, null, dto.getTime(),

@@ -75,7 +75,7 @@ public class ForumController {
         return RestBean.success(topic.getTopic(tid, id), null);
     }
 
-    @GetMapping("/interact")
+    @PostMapping("/interact")
     public RestBean<Void> interact(@RequestParam @Min(0) int tid,
             @RequestParam @Pattern(regexp = "(like|collect)") String type,
             @RequestParam boolean state,
@@ -118,7 +118,7 @@ public class ForumController {
         return RestBean.success(topic.comments(tid, page), null);
     }
 
-    @GetMapping("/delete-comment")
+    @DeleteMapping("/delete-comment")
     public RestBean<Void> deleteComment(@RequestParam @Min(1) int id,
             @RequestAttribute("id") int uid) {
         topic.deleteComment(uid, id);

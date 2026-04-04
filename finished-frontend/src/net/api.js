@@ -2,7 +2,8 @@ import axios from "axios";
 import { ElMessage } from "element-plus";
 import router from "@/router/index.js";
 
-const defaultUrl = "http://localhost:8080"
+// ===== 统一 API 基础地址（从 Vite 环境变量读取） =====
+const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 const tokenAndExpire = "tokenAndExpire"
 
@@ -32,7 +33,6 @@ const deleteToken = () => {
 }
 
 const storeToken = (token, remember, expire) => {
-    console.log(`${token}+${expire}`)
     const auth = { token: token, expire: expire };
     if (remember) {
         localStorage.setItem(tokenAndExpire, JSON.stringify(auth));
@@ -42,7 +42,7 @@ const storeToken = (token, remember, expire) => {
 }
 
 const doGet = (url, header, success, failure = defaultFailure, error = defaultError) => {
-    axios.get(defaultUrl + url, { headers: header }).then((res) => {
+    axios.get(baseURL + url, { headers: header }).then((res) => {
         if (res.data.code === 200) {
             success(res.data.data)
         } else {
@@ -60,7 +60,7 @@ const get = (url, success, failure = defaultFailure) => {
 }
 
 const doPost = (url, data, header, success, failure = defaultFailure, error = defaultError) => {
-    axios.post(defaultUrl + url, data, { headers: header }).then((res) => {
+    axios.post(baseURL + url, data, { headers: header }).then((res) => {
         if (res.data.code === 200) {
             success(res.data.data)
         } else {
@@ -76,6 +76,20 @@ const post = (url, data, success, failure = defaultFailure) => {
     doPost(url, data, {
         "Authorization": `Bearer ${getToken()}`,
     }, success, failure)
+}
+
+const del = (url, success, failure = defaultFailure, error = defaultError) => {
+    axios.delete(baseURL + url, {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+    }).then((res) => {
+        if (res.data.code === 200) {
+            success(res.data.data)
+        } else {
+            failure(res.data.message, res.data.code, url)
+        }
+    }).catch(err => {
+        error(err)
+    })
 }
 
 const login = (username, password, remember) => {
@@ -108,4 +122,4 @@ const isLogin = () => {
     return getToken()
 }
 
-export { doGet, doPost, login, logout, askCodeForType, isLogin, get, post, getToken }
+export { baseURL, doGet, doPost, login, logout, askCodeForType, isLogin, get, post, del, getToken }

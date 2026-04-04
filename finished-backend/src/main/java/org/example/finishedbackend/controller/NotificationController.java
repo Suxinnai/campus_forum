@@ -21,14 +21,14 @@ public class NotificationController {
         return RestBean.success(service.findUserNotifications(id), null);
     }
 
-    @GetMapping("/delete")
+    @DeleteMapping("/delete")
     public RestBean<Integer> deleteNotification(@RequestAttribute("id") int uid,
                                                 @RequestParam @Min(0) int id) {
         service.deleteUserNotifications(id, uid);
         return RestBean.success(null);
     }
 
-    @GetMapping("/delete-all")
+    @DeleteMapping("/delete-all")
     public RestBean<Integer> deleteAllNotification(@RequestAttribute("id") int uid) {
         service.deleteUserAllNotifications(uid);
         return RestBean.success(null);

@@ -67,15 +67,7 @@ public class RecommendServiceImpl implements RecommendService {
         if (userVector.size() < 3) {
             log.info("用户 {} 行为记录不足, 降级为热度推荐", uid);
             return topicService.listTopTopics().stream()
-                    .map(top -> {
-                        TopicDTO dto = topicService.getById(top.getId());
-                        if (dto == null)
-                            return null;
-                        return topicService.listTopicByPage(0, 0);
-                    })
-                    .filter(Objects::nonNull)
-                    .flatMap(List::stream)
-                    .distinct()
+                    .map(top -> topicService.resolvePreviewById(top.getId()))
                     .limit(10)
                     .collect(Collectors.toList());
         }
@@ -124,21 +116,12 @@ public class RecommendServiceImpl implements RecommendService {
 
         // 8. 查询帖子详情并返回
         if (recommendIds.isEmpty()) {
-            // 无推荐结果时也降级为热度推荐
-            return topicService.listTopicByPage(0, 0);
+            // 无推荐结果时，查询最新帖子作为降级推荐
+            return topicService.listTopicByPage(0, 0); // 或者考虑直接查询最近 N 条
         }
 
         return recommendIds.stream()
-                .map(tid -> {
-                    TopicDTO dto = topicService.getById(tid);
-                    if (dto == null)
-                        return null;
-                    // 复用 listTopicByPage 的预览转换逻辑
-                    return topicService.listTopicByPage(0, 0).stream()
-                            .filter(p -> p.getId() == tid)
-                            .findFirst()
-                            .orElse(null);
-                })
+                .map(tid -> topicService.resolvePreviewById(tid))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }

@@ -1,5 +1,5 @@
 <script setup>
-import {get} from "@/net/api.js";
+import {get, post} from "@/net/api.js";
 import {reactive, ref} from "vue";
 import LightCard from "@/components/LightCard.vue";
 import router from "@/router/index.js";
@@ -21,7 +21,7 @@ function init() {
 }
 
 function deleteCollect(index, tid) {
-  get(`/api/forum/interact?tid=${tid}&type=collect&state=false`, () => {
+  post(`/api/forum/interact?tid=${tid}&type=collect&state=false`, null, () => {
     ElMessage.success({message: "取消收藏成功", plain: true})
     list.value.splice(index, 1);
   })

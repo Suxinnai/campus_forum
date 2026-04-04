@@ -1,5 +1,5 @@
 <script setup>
-import {get, post} from "@/net/api.js";
+import {get, post, del} from "@/net/api.js";
 import {useRoute} from "vue-router";
 import axios from "axios";
 import {computed, reactive, ref} from "vue";
@@ -104,7 +104,7 @@ function onCommentAdd() {
 }
 
 function deleteComment(id) {
-  get(`/api/forum/delete-comment?id=${id}`, () => {
+  del(`/api/forum/delete-comment?id=${id}`, () => {
     ElMessage.success({message: "删除成功", plain: true})
     loadComments(topic.page)
   })

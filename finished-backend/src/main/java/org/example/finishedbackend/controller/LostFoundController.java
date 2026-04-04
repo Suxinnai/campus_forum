@@ -28,7 +28,7 @@ public class LostFoundController {
         return result == null ? RestBean.success("发布成功") : RestBean.failure(400, result);
     }
 
-    @GetMapping("/close")
+    @PostMapping("/close")
     public RestBean<Void> close(@RequestParam int id, @RequestAttribute("id") int uid) {
         String result = lostFoundService.close(id, uid);
         return result == null ? RestBean.success("已关闭") : RestBean.failure(400, result);

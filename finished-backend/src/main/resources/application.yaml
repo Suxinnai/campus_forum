@@ -3,28 +3,28 @@ server:
 
 spring:
   minio:
-    endpoint: "http://localhost:9000"
-    username: "minioadmin"
-    password: "minioadmin"
+    endpoint: "${MINIO_ENDPOINT:http://localhost:9000}"
+    username: "${MINIO_USERNAME:minioadmin}"
+    password: "${MINIO_PASSWORD:minioadmin}"
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: a1234568
-    url: jdbc:mysql://localhost:3306/campus_forum?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: "${DB_USERNAME:root}"
+    password: "${DB_PASSWORD:}"
+    url: "${DB_URL:jdbc:mysql://localhost:3306/campus_forum?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}"
   security:
     jwt:
-      key: key_for_me
+      key: "${JWT_KEY:dev-key-change-me}"
   mail:
-    host: smtp.163.com
-    username: sunoixy@163.com
-    password: KHb9qdjXFphXVtKe
+    host: "${MAIL_HOST:smtp.163.com}"
+    username: "${MAIL_USERNAME:}"
+    password: "${MAIL_PASSWORD:}"
   rabbitmq:
-    addresses: localhost
-    username: guest
-    password: guest
+    addresses: "${RABBITMQ_HOST:localhost}"
+    username: "${RABBITMQ_USER:guest}"
+    password: "${RABBITMQ_PASSWORD:guest}"
     virtual-host: /
   weather:
-    key: 0341da776d6d4a50adba1f75c3aa3905
+    key: "${WEATHER_KEY:}"
   servlet:
     multipart:
       max-file-size: 10MB

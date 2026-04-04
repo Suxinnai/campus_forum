@@ -1,7 +1,7 @@
 /**
  * 论坛模块 API
  */
-import { get, post } from '@/net/api.js'
+import { get, post, del } from '@/net/api.js'
 
 // 天气
 export const getWeather = (success, failure) =>
@@ -25,7 +25,7 @@ export const getTopicDetail = (tid, success) =>
 
 // 点赞/收藏
 export const interactTopic = (tid, type, state, success) =>
-    get(`/api/forum/interact?tid=${tid}&type=${type}&state=${state}`, success)
+    post(`/api/forum/interact?tid=${tid}&type=${type}&state=${state}`, null, success)
 
 // 收藏列表
 export const getCollects = (success) =>
@@ -41,4 +41,4 @@ export const getComments = (tid, page, success) =>
 
 // 删除评论
 export const deleteComment = (id, success) =>
-    get(`/api/forum/delete-comment?id=${id}`, success)
+    del(`/api/forum/delete-comment?id=${id}`, success)
