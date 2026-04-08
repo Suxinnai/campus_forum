@@ -1,6 +1,7 @@
 package org.example.finishedbackend.entity.DTO;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -17,4 +18,10 @@ public class TopicCommentDTO {
     String content;
     Date time;
     Integer quote;
+    
+    @TableField("like_count")
+    Integer likeCount;
+    
+    @TableField("hot_score")
+    Double hotScore;
 }

@@ -43,7 +43,17 @@ public class SecurityConfiguration {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
                 .authorizeHttpRequests(config -> {
-                    config.requestMatchers("/api/auth/**", "/api/user/**", "/images/**").permitAll();
+                    config.requestMatchers(
+                            "/api/auth/**",
+                            "/images/**",
+                            "/api/docs/**",
+                            "/api/docs/ui",
+                            "/api/docs/ui/**",
+                            "/swagger-ui.html",
+                            "/swagger-ui/**",
+                            "/v3/api-docs/**"
+                    ).permitAll();
+                    config.requestMatchers("/api/admin/**").hasRole("admin");
                     config.anyRequest().authenticated();
                 })
                 .formLogin(conf -> {

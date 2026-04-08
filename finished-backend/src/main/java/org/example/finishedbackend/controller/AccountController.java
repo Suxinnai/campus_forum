@@ -6,17 +6,16 @@ import org.example.finishedbackend.entity.DTO.AccountDTO;
 import org.example.finishedbackend.entity.DTO.AccountDetailsDTO;
 import org.example.finishedbackend.entity.DTO.AccountPrivacyDTO;
 import org.example.finishedbackend.entity.RestBean;
+import org.example.finishedbackend.entity.VO.request.ChangePasswordVO;
 import org.example.finishedbackend.entity.VO.request.DetailsSaveVO;
 import org.example.finishedbackend.entity.VO.request.ModifyEmailVO;
 import org.example.finishedbackend.entity.VO.request.PrivacySaveVO;
-import org.example.finishedbackend.entity.VO.request.changePasswordVO;
 import org.example.finishedbackend.entity.VO.response.AccountDetailsVO;
 import org.example.finishedbackend.entity.VO.response.AccountPrivacyVO;
 import org.example.finishedbackend.entity.VO.response.AccountVO;
 import org.example.finishedbackend.service.AccountDetailsService;
 import org.example.finishedbackend.service.AccountPrivacyService;
 import org.example.finishedbackend.service.AccountService;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -63,7 +62,7 @@ public class AccountController {
 
     @PostMapping("/change-password")
     public RestBean<Void> changePassword(@RequestAttribute("id") int id,
-                                         @RequestBody @Valid changePasswordVO vo) {
+                                         @RequestBody @Valid ChangePasswordVO vo) {
         String s = accountService.changePassword(id, vo);
         return s == null ? RestBean.success("修改密码成功") : RestBean.failure(401, s);
     }

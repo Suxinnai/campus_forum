@@ -3,23 +3,22 @@ package org.example.finishedbackend.service.Impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import io.minio.GetObjectArgs;
-import io.minio.GetObjectResponse;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.compress.utils.IOUtils;
 import org.example.finishedbackend.entity.DTO.AccountDTO;
 import org.example.finishedbackend.entity.DTO.ResourceDTO;
 import org.example.finishedbackend.entity.VO.response.ResourceVO;
 import org.example.finishedbackend.mapper.AccountMapper;
 import org.example.finishedbackend.mapper.ResourceMapper;
 import org.example.finishedbackend.service.ResourceService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -29,8 +28,8 @@ import java.util.UUID;
 @Service
 public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO> implements ResourceService {
 
-    @Resource
-    MinioClient client;
+    @Value("${app.image-storage-path:./uploads}")
+    private String storagePath;
 
     @Resource
     AccountMapper accountMapper;
@@ -41,20 +40,17 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
     public String uploadResource(MultipartFile file, String title, String category,
             String description, int uploaderId) {
         String originalFilename = file.getOriginalFilename();
-        String objectName = "/resource/" + format.format(new Date()) + "/"
+        String relativePath = "/resource/" + format.format(new Date()) + "/"
                 + UUID.randomUUID().toString().replace("-", "") + "_" + originalFilename;
-        PutObjectArgs args;
         try {
-            args = PutObjectArgs.builder()
-                    .bucket("forum")
-                    .stream(file.getInputStream(), file.getSize(), -1)
-                    .object(objectName)
-                    .build();
-            client.putObject(args);
+            Path target = Paths.get(storagePath + relativePath);
+            Files.createDirectories(target.getParent());
+            file.transferTo(target);
+
             ResourceDTO dto = new ResourceDTO();
             dto.setTitle(title);
             dto.setCategory(category);
-            dto.setFileUrl(objectName);
+            dto.setFileUrl(relativePath);
             dto.setFileName(originalFilename);
             dto.setFileSize(file.getSize());
             dto.setUploaderId(uploaderId);
@@ -101,17 +97,11 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
         ResourceDTO dto = this.getById(id);
         if (dto == null)
             return null;
-        // 增加下载次数
         this.update(Wrappers.<ResourceDTO>update()
                 .setSql("download_count = download_count + 1")
                 .eq("id", id));
-        // 从 MinIO 获取文件流
-        GetObjectArgs args = GetObjectArgs.builder()
-                .bucket("forum")
-                .object(dto.getFileUrl())
-                .build();
-        GetObjectResponse response = client.getObject(args);
-        IOUtils.copy(response, stream);
+        Path path = Paths.get(storagePath + dto.getFileUrl());
+        Files.copy(path, stream);
         return dto;
     }
 }

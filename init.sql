@@ -320,3 +320,23 @@ INSERT INTO db_book (title, author, isbn, category, description, location, avail
 ('三体', '刘慈欣', '978-7-229-03093-3', '文学小说', '中国科幻文学里程碑式的作品', '二楼C区-22架', 0),
 ('活着', '余华', '978-7-5063-3843-4', '文学小说', '一部充满力量的经典文学作品', '二楼C区-25架', 1),
 ('高等数学（第七版）', '同济大学数学系', '978-7-04-039663-8', '教材', '工科高等数学经典教材', '一楼教材区-01架', 1);
+
+-- ---------------------------------------------------
+-- 19. 敏感词库表 (db_sensitive_word) 【新增】
+-- 用于发帖/评论敏感词精确匹配过滤
+-- ---------------------------------------------------
+CREATE TABLE IF NOT EXISTS db_sensitive_word (
+    id   INT PRIMARY KEY AUTO_INCREMENT,
+    word VARCHAR(50) NOT NULL UNIQUE COMMENT '敏感词（唯一）',
+    INDEX idx_word (word)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 预置初始敏感词（可在管理后台添加/删除）
+INSERT INTO db_sensitive_word (word) VALUES ('垃圾'), ('广告'), ('骗子');
+
+-- ---------------------------------------------------
+-- 20. 置顶字段补丁 (如果 db_topic 中无 top 列)
+-- 在已有数据库上执行此补丁； init.sql 建表时已含此列可忽略
+-- ---------------------------------------------------
+ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `top` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否置顶 1=置顶 0=普通';
+

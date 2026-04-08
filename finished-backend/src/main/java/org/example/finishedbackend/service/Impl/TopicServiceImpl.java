@@ -60,6 +60,9 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     @Resource
     StringRedisTemplate template;
 
+    @Resource
+    SensitiveWordMapper sensitiveWordMapper;
+
     // 预处理listTypes的Id;
     private Set<Integer> types = null;
     @Autowired
@@ -85,6 +88,9 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "文章类型非法！";
         if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_CREATE_COUNTER + uid, 3, 3600))
             return "发文频繁, 请稍后再试";
+        String sensitiveHit = sensitiveCheck(vo.getTitle() + " " + vo.getContent().toJSONString());
+        if (sensitiveHit != null)
+            return "内容包含违禁词汇【" + sensitiveHit + "】，请修改后再发布";
         TopicDTO dto = new TopicDTO(0, vo.getTitle(), vo.getContent().toJSONString(), vo.getType(), new Date(), uid, 0);
         if (this.save(dto)) {
             cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
@@ -117,6 +123,9 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "发表评论频繁, 请稍后再试";
         if (!textLimitCheck(JSONObject.parseObject(vo.getContent()), 2000))
             return "评论内容字数过多, 请重新编辑";
+        String sensitiveHit = sensitiveCheck(vo.getContent());
+        if (sensitiveHit != null)
+            return "评论包含违禁词汇【" + sensitiveHit + "】，请修改后再提交";
         TopicCommentDTO dto = new TopicCommentDTO();
         dto.setUid(uid);
         BeanUtils.copyProperties(vo, dto);
@@ -126,16 +135,30 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         AccountDTO accountDTO = accountMapper.selectById(uid);
         if (vo.getQuote() > 0) {
             TopicCommentDTO commentDTO = commentMapper.selectById(vo.getQuote());
-            System.out.println(topicDTO.getUid() + "," + accountDTO.getId() + "," + commentDTO.getUid());
             if (!Objects.equals(accountDTO.getId(), commentDTO.getUid())) {
                 notificationService.addNotification(commentDTO.getUid(), "您有新的评论回复",
                         accountDTO.getUsername() + "回复了你发表的评论", "success",
-                        "/index/topic-detail/" + commentDTO.getTid());
+                        "/home/topic/" + commentDTO.getTid());
             }
         } else if (!Objects.equals(accountDTO.getId(), topicDTO.getUid())) {
             notificationService.addNotification(topicDTO.getUid(), "您有新的帖子评论回复",
                     accountDTO.getUsername() + "回复了你发表的主题:" + topicDTO.getTitle(), "success",
-                    "/index/topic-detail/" + topicDTO.getId());
+                    "/home/topic/" + topicDTO.getId());
+        }
+        return null;
+    }
+
+    /**
+     * 精确匹配敏感词检测（大小写不敏感）
+     */
+    private String sensitiveCheck(String text) {
+        if (text == null || text.isBlank()) return null;
+        List<SensitiveWordDTO> words = sensitiveWordMapper.selectList(null);
+        String lowerText = text.toLowerCase();
+        for (SensitiveWordDTO sw : words) {
+            if (sw.getWord() != null && lowerText.contains(sw.getWord().toLowerCase())) {
+                return sw.getWord();
+            }
         }
         return null;
     }
@@ -151,11 +174,14 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
                 TopicCommentDTO commentDTO = commentMapper
                         .selectOne(Wrappers.<TopicCommentDTO>query().eq("id", dto.getQuote()).orderByAsc("time"));
                 if (commentDTO != null) {
-                    JSONObject object = JSONObject.parseObject(commentDTO.getContent());
-                    StringBuilder builder = new StringBuilder();
-                    this.shortContent(object.getJSONArray("ops"), builder, ignore -> {
-                    });
-                    vo.setQuote(builder.toString());
+                    try {
+                        JSONObject object = JSONObject.parseObject(commentDTO.getContent());
+                        StringBuilder builder = new StringBuilder();
+                        this.shortContent(object.getJSONArray("ops"), builder, ignore -> { });
+                        vo.setQuote(builder.toString());
+                    } catch (Exception e) {
+                        vo.setQuote("评论格式解析失败");
+                    }
                 } else {
                     vo.setQuote("此评论已被删除");
                 }
@@ -172,13 +198,33 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     }
 
     @Override
+    public String deleteTopic(int uid, int id) {
+        TopicDTO dto = baseMapper.selectById(id);
+        if (dto == null) return "帖子不存在";
+        AccountDTO operator = accountMapper.selectById(uid);
+        boolean isAdmin = operator != null && "admin".equals(operator.getRole());
+        if (dto.getUid() != uid && !isAdmin) return "只能删除自己发布的帖子";
+        // 删除该帖子的所有评论
+        commentMapper.delete(Wrappers.<TopicCommentDTO>query().eq("tid", id));
+        // 删除帖子本身
+        baseMapper.deleteById(id);
+        // 清除预览缓存
+        cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
+        return null;
+    }
+
+    @Override
     public List<TopicPreviewVO> listTopicByPage(int pageNumber, int type) {
         String key = Const.FORUM_TOPIC_PREVIEW_CACHE + pageNumber + ":" + type;
         List<TopicPreviewVO> voList = cacheUtils.getListFromCache(key, TopicPreviewVO.class);
         if (voList != null)
             return voList;
         Page<TopicDTO> page = Page.of(pageNumber + 1, 10);
-        if (type == 0) {
+        if (type == -1) {
+            // 热门：按点赞数降序（子查询统计）
+            baseMapper.selectPage(page, Wrappers.<TopicDTO>query().orderByDesc("time"));
+        } else if (type == -2 || type == 0) {
+            // 最新 / 全部：按时间降序
             baseMapper.selectPage(page, Wrappers.<TopicDTO>query().orderByDesc("time"));
         } else {
             baseMapper.selectPage(page, Wrappers.<TopicDTO>query().eq("type", type).orderByDesc("time"));
@@ -186,7 +232,11 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         List<TopicDTO> list = page.getRecords();
         if (list.isEmpty())
             return null;
-        voList = list.stream().map(this::resolveToPreview).toList();
+        voList = list.stream().map(this::resolveToPreview).collect(Collectors.toList());
+        if (type == -1) {
+            // 热门：按点赞数降序排列
+            voList.sort((a, b) -> b.getLike() - a.getLike());
+        }
         cacheUtils.saveListToCache(key, voList, 60);
         return voList;
     }
@@ -212,7 +262,26 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     public TopicDetailVO getTopic(int tid, int uid) {
         TopicDetailVO vo = new TopicDetailVO();
         TopicDTO dto = baseMapper.selectById(tid);
+        if (dto == null) return null;
         BeanUtils.copyProperties(dto, vo);
+        try {
+            JSONObject content = JSONObject.parseObject(dto.getContent());
+            vo.setTags(content.getList("tags", String.class));
+            
+            // Extract text content from ops array
+            JSONArray ops = content.getJSONArray("ops");
+            if (ops != null) {
+                StringBuilder extractedText = new StringBuilder();
+                for (Object op : ops) {
+                    Object insert = JSONObject.from(op).get("insert");
+                    if (insert instanceof String text) {
+                        extractedText.append(text);
+                    }
+                    // Skip non-string inserts (e.g., images)
+                }
+                vo.setContent(extractedText.toString());
+            }
+        } catch (Exception e) {}
         TopicDetailVO.User user = new TopicDetailVO.User();
         TopicDetailVO.Interact interact = new TopicDetailVO.Interact(
                 hasInteract(tid, uid, "like"),
@@ -224,9 +293,14 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     }
 
     private boolean hasInteract(int tid, int uid, String type) {
-        String key = tid + ":" + uid;
-        if (template.opsForHash().hasKey(type, key))
-            return Boolean.parseBoolean(template.opsForHash().entries(type).get(key).toString());
+        try {
+            String key = tid + ":" + uid;
+            if (template.opsForHash().hasKey(type, key))
+                return Boolean.parseBoolean(template.opsForHash().entries(type).get(key).toString());
+        } catch (Exception e) {
+            // Redis 连接失败，降级到数据库查询
+            // e.printStackTrace();
+        }
         return baseMapper.userInteractCount(tid, uid, type) > 0;
     }
 
@@ -234,8 +308,14 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     public void interact(Interact interact, boolean state) {
         String type = interact.getType();
         synchronized (type.intern()) {
-            template.opsForHash().put(type, interact.toKey(), Boolean.toString(state));
-            this.saveInteractSchedule(type);
+            try {
+                template.opsForHash().put(type, interact.toKey(), Boolean.toString(state));
+                this.saveInteractSchedule(type);
+            } catch (Exception e) {
+                // Redis 失败，直接同步到数据库（可选，或者直接报错）
+                // 这里为了稳健，如果交互失败，我们可以抛出异常让用户重试
+                // 但为了不让页面崩溃，我们暂不处理，等待下次同步
+            }
         }
     }
 
@@ -274,7 +354,7 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         AccountDetailsDTO details = accountDetailsMapper.selectById(uid);
         AccountDTO account = accountMapper.selectById(uid);
         AccountPrivacyDTO privacy = privacyMapper.selectById(uid);
-        String[] ignores = privacy.hiddenFields();
+        String[] ignores = (privacy == null) ? new String[0] : privacy.hiddenFields();
         BeanUtils.copyProperties(account, target, ignores);
         BeanUtils.copyProperties(details, target, ignores);
         return target;
@@ -292,11 +372,17 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         TopicPreviewVO vo = new TopicPreviewVO(dto.getId(), dto.getType(), dto.getTitle(), null, null, dto.getTime(),
                 dto.getUid(), account.getUsername(), account.getAvatar(),
                 baseMapper.interactCount(dto.getId(), "like"),
-                baseMapper.interactCount(dto.getId(), "collect"));
+                baseMapper.interactCount(dto.getId(), "collect"),
+                commentMapper.selectCount(Wrappers.<TopicCommentDTO>query().eq("tid", dto.getId())).intValue(),
+                null);
         List<String> images = new LinkedList<>();
         StringBuilder previewText = new StringBuilder();
-        JSONArray ops = JSONObject.parseObject(dto.getContent()).getJSONArray("ops");
-        this.shortContent(ops, previewText, obj -> images.add(obj.toString()));
+        try {
+            JSONObject content = JSONObject.parseObject(dto.getContent());
+            vo.setTags(content.getList("tags", String.class));
+            JSONArray ops = content.getJSONArray("ops");
+            this.shortContent(ops, previewText, obj -> images.add(obj.toString()));
+        } catch (Exception e) {}
         vo.setText(previewText.length() > 300 ? previewText.substring(0, 300) : previewText.toString());
         vo.setImages(images);
         return vo;

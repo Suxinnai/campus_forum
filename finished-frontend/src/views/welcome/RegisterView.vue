@@ -85,9 +85,9 @@ const register = (formRef) => {
         username: form.username,
         password: form.repeat_password,
         code: form.code
-      }, {"Content-Type" : "application/x-www-form-urlencoded"}, () => {
+      }, {}, () => {
         ElMessage.success({message: "注册成功!", plain: true})
-        router.push("/")
+        router.push("/login")
       });
     }
   })
@@ -145,7 +145,7 @@ const register = (formRef) => {
         <el-button type="primary" class="register-btn" @click="register(formRef)">立即注册</el-button>
         <div class="footer-links">
           <span>已有账号?</span>
-          <el-link type="primary" @click="router.push('/')">立即登录</el-link>
+          <el-link type="primary" @click="router.push('/login')">立即登录</el-link>
         </div>
       </div>
     </div>

@@ -1,11 +1,13 @@
 server:
   port: 8080
 
+app:
+  image-storage-path: "${IMAGE_STORAGE_PATH:./uploads}"
+
 spring:
-  minio:
-    endpoint: "${MINIO_ENDPOINT:http://localhost:9000}"
-    username: "${MINIO_USERNAME:minioadmin}"
-    password: "${MINIO_PASSWORD:minioadmin}"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: "${DB_USERNAME:root}"
@@ -36,3 +38,12 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: auto
+
+springdoc:
+  api-docs:
+    path: /api/docs
+  swagger-ui:
+    path: /api/docs/ui
+    tags-sorter: alpha
+    operations-sorter: alpha
+    display-request-duration: true

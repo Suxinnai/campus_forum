@@ -4,7 +4,7 @@ import {Key, Lock, Message} from "@element-plus/icons-vue";
 import router from "@/router/index.js";
 import {reactive, ref, watch} from "vue";
 import {ElMessage} from "element-plus";
-import {askCodeForType, doGet, doPost} from "@/net/api.js";
+import {askCodeForType, doPost} from "@/net/api.js";
 
 const form = reactive({
   email: "",
@@ -66,7 +66,6 @@ watch(codeTime, () => {
 })
 
 const reset = async (formRef) => {
-  console.log(formRef)
   if (!formRef) return;
   formRef.validate(valid => {
     if (valid) {
@@ -74,9 +73,9 @@ const reset = async (formRef) => {
         email: form.email,
         password: form.repeat_password,
         code: form.code
-      }, {"Content-Type" : "application/x-www-form-urlencoded"}, () => {
+      }, {}, () => {
         ElMessage.success({message: "密码重置成功, 请重新登录", plain: true})
-        router.push("/")
+        router.push("/login")
       });
     }
   })
@@ -128,7 +127,7 @@ const reset = async (formRef) => {
       <div class="actions">
         <el-button type="primary" class="reset-btn" @click="reset(formRef)">重置密码</el-button>
         <div class="footer-links">
-          <el-link type="info" @click="router.push('/')">返回登录</el-link>
+          <el-link type="info" @click="router.push('/login')">返回登录</el-link>
         </div>
       </div>
     </div>

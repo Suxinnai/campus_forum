@@ -82,8 +82,14 @@ html.dark body {
 }
 
 .el-tag {
-  border-radius: 6px !important;
+  border-radius: 999px !important;
   border: none !important;
+}
+
+/* Input focus ring */
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 3px rgba(99,102,241,.12) !important;
 }
 
 /* ====== Universal Utilities ====== */
@@ -103,4 +109,18 @@ html.dark {
 
 html.dark body {
   background-color: #141414 !important;
+}
+
+/* ====== User Dropdown Popper ====== */
+.user-dropdown-popper .el-popper__arrow { display: none; }
+.user-dropdown-popper .el-dropdown__popper {
+  border-radius: 18px !important;
+  border: 1px solid var(--el-border-color-lighter) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12) !important;
+  overflow: hidden;
+  padding: 0 !important;
+}
+.user-dropdown-popper .el-dropdown-menu {
+  padding: 0 !important;
+  border-radius: 18px !important;
 }

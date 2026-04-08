@@ -11,5 +11,5 @@ import java.io.OutputStream;
 public interface ImageService extends IService<StoreImageDTO> {
     String uploadAvatar(MultipartFile file, int id) throws IOException;
     String uploadImage(MultipartFile file, int id) throws IOException;
-    void fetchImageFromMinio(OutputStream stream, String image) throws Exception ;
+    void fetchImage(OutputStream stream, String image) throws Exception;
 }

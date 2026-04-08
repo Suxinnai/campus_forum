@@ -1,52 +1,34 @@
 <script setup>
-import {ref, onMounted, markRaw} from 'vue'
-import {get} from "@/net/api.js"
-import {use} from 'echarts/core'
-import {CanvasRenderer} from 'echarts/renderers'
-import {LineChart, PieChart} from 'echarts/charts'
-import {
-  TitleComponent,
-  TooltipComponent,
-  LegendComponent,
-  GridComponent,
-} from 'echarts/components'
+import { ref, onMounted } from 'vue'
+import { get } from "@/net/api.js"
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart, PieChart } from 'echarts/charts'
+import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
+import { TrendingUp, PieChart as PieIcon, Hash } from 'lucide-vue-next'
 
-use([
-  CanvasRenderer,
-  LineChart,
-  PieChart,
-  TitleComponent,
-  TooltipComponent,
-  LegendComponent,
-  GridComponent,
-])
+use([CanvasRenderer, LineChart, PieChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
 
 const lineOption = ref(null)
 const pieOption = ref(null)
 const wordCloudData = ref([])
 
-// 加载发帖趋势数据
 function loadHotTrend() {
   get('/api/stat/hot-trend', (data) => {
     lineOption.value = {
-      title: {
-        text: '近7天发帖热度趋势', 
-        left: 'center',
-        textStyle: { fontWeight: 600, fontSize: 16 }
-      },
-      tooltip: {trigger: 'axis'},
+      tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#DDD6FE', textStyle: { color: '#1E1B4B' } },
       grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
       xAxis: {
         type: 'category',
         data: data.map(item => item.date),
-        axisLine: { lineStyle: { color: '#eee' } },
-        axisLabel: { color: '#666' }
+        axisLine: { lineStyle: { color: '#DDD6FE' } },
+        axisLabel: { color: '#6B7280', fontSize: 12 }
       },
       yAxis: {
-        type: 'value', 
-        splitLine: { lineStyle: { color: '#f5f5f5', type: 'dashed' } },
-        axisLabel: { color: '#666' }
+        type: 'value',
+        splitLine: { lineStyle: { color: '#F5F3FF', type: 'dashed' } },
+        axisLabel: { color: '#6B7280', fontSize: 12 }
       },
       series: [{
         data: data.map(item => item.count),
@@ -54,47 +36,36 @@ function loadHotTrend() {
         smooth: true,
         showSymbol: false,
         areaStyle: {
-          color: {
-            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              {offset: 0, color: 'rgba(138, 216, 255, 0.6)'},
-              {offset: 1, color: 'rgba(138, 216, 255, 0.05)'}
-            ]
+          color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [{ offset: 0, color: 'rgba(124,58,237,0.25)' }, { offset: 1, color: 'rgba(124,58,237,0.02)' }]
           }
         },
-        lineStyle: {color: '#8ad8ff', width: 3},
-        itemStyle: {color: '#8ad8ff'}
+        lineStyle: { color: '#7C3AED', width: 3 },
+        itemStyle: { color: '#7C3AED' }
       }]
     }
   })
 }
 
-// 加载分类占比数据
 function loadCategoryPie() {
   get('/api/stat/category-pie', (data) => {
     pieOption.value = {
-      title: {
-        text: '板块活跃度分布', 
-        left: 'center',
-        textStyle: { fontWeight: 600, fontSize: 16 }
-      },
-      tooltip: {trigger: 'item', formatter: '{b}: {c} ({d}%)'},
-      legend: {bottom: '0', icon: 'circle'},
-      color: ['#8ad8ff', '#addffe', '#6ebce6', '#bce6fd', '#d8f1fe', '#4ba3e3'],
+      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+      legend: { bottom: '0', icon: 'circle', textStyle: { color: '#6B7280' } },
+      color: ['#7C3AED', '#A78BFA', '#16A34A', '#F59E0B', '#EF4444', '#3B82F6'],
       series: [{
         type: 'pie',
-        radius: ['45%', '70%'],
-        center: ['50%', '45%'],
+        radius: ['42%', '68%'],
+        center: ['50%', '44%'],
         avoidLabelOverlap: false,
-        itemStyle: {borderRadius: 8, borderColor: '#fff', borderWidth: 2},
-        label: {show: false},
-        data: data.map(item => ({name: item.name, value: item.value}))
+        itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 3 },
+        label: { show: false },
+        data: data.map(item => ({ name: item.name, value: item.value }))
       }]
     }
   })
 }
 
-// 加载关键词词频数据
 function loadKeywordCloud() {
   get('/api/stat/keyword-cloud', (data) => {
     wordCloudData.value = data || []
@@ -109,116 +80,117 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="stat-view">
-    <div class="page-header">
-      <div class="title-area">
-        <span class="emoji">📊</span>
-        <h2 style="margin:0; color: #6dbcf0">数据可视化</h2>
-      </div>
+  <div class="ds-page">
+    <div class="ds-page-header">
+      <h2 class="page-title">
+        <span class="title-accent"></span>
+        数据统计
+      </h2>
     </div>
 
     <div class="chart-grid">
-      <div class="chart-card">
-        <v-chart v-if="lineOption" :option="lineOption" style="height: 380px; width: 100%;" autoresize />
-        <el-empty v-else description="暂无热度数据" />
+      <div class="chart-card ds-card">
+        <div class="chart-card-header">
+          <TrendingUp :size="18" class="chart-icon" />
+          <span>近7天发帖热度趋势</span>
+        </div>
+        <v-chart v-if="lineOption" :option="lineOption" style="height: 320px; width: 100%;" autoresize />
+        <el-empty v-else description="暂无数据" :image-size="80" />
       </div>
 
-      <div class="chart-card">
-        <v-chart v-if="pieOption" :option="pieOption" style="height: 380px; width: 100%;" autoresize />
-        <el-empty v-else description="暂无分布数据" />
+      <div class="chart-card ds-card">
+        <div class="chart-card-header">
+          <PieIcon :size="18" class="chart-icon" />
+          <span>板块活跃度分布</span>
+        </div>
+        <v-chart v-if="pieOption" :option="pieOption" style="height: 320px; width: 100%;" autoresize />
+        <el-empty v-else description="暂无数据" :image-size="80" />
       </div>
     </div>
 
-    <div class="chart-card keyword-card" style="margin-top: 24px;">
-      <h3 class="card-title" style="color: #0d4a75">❄️ 冰璃实时热词榜</h3>
+    <div class="keyword-card ds-card">
+      <div class="chart-card-header">
+        <Hash :size="18" class="chart-icon" />
+        <span>热词榜</span>
+      </div>
       <div v-if="wordCloudData.length" class="keyword-cloud">
-        <div 
-          v-for="(item, index) in wordCloudData" 
+        <span
+          v-for="(item, index) in wordCloudData"
           :key="index"
-          class="keyword-item"
+          class="keyword-tag"
           :style="{
-            fontSize: Math.min(13 + item.value * 1.5, 28) + 'px',
-            color: ['#8ad8ff', '#5ebdf0', '#9ce6ff', '#addffe', '#6ebce6'][index % 5],
-            opacity: Math.max(0.6, Math.min(1, item.value / 10 + 0.4))
+            fontSize: Math.min(12 + item.value * 1.8, 26) + 'px',
+            opacity: Math.max(0.5, Math.min(1, item.value / 10 + 0.4))
           }"
         >
           {{ item.name }}
-          <span class="count">{{ item.value }}</span>
-        </div>
+          <sup class="kw-count">{{ item.value }}</sup>
+        </span>
       </div>
-      <el-empty v-else description="暂无关键词数据" />
+      <el-empty v-else description="暂无关键词数据" :image-size="80" />
     </div>
   </div>
 </template>
 
 <style lang="less" scoped>
-.stat-view {
-  max-width: 1200px;
-  margin: 20px auto;
-  padding: 0 15px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-  .title-area {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    .emoji { font-size: 28px; }
-  }
-}
+@import '@/assets/design-system.less';
 
 .chart-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
 }
 
-.chart-card {
-  background: var(--el-bg-color);
-  border-radius: var(--card-radius);
+.chart-card, .keyword-card {
   padding: 24px;
-  box-shadow: var(--card-shadow);
-  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s;
-  
+  transition: var(--ds-transition);
+
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 30px rgba(0,0,0,0.06);
+    box-shadow: var(--ds-shadow-md);
   }
+}
 
-  .card-title {
-    margin: 0 0 20px 0;
-    font-size: 16px;
-    font-weight: 600;
-  }
+.chart-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ds-text-1);
+  margin-bottom: 20px;
+
+  .chart-icon { color: var(--ds-primary); }
 }
 
 .keyword-cloud {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 16px 24px;
-  padding: 20px;
-  min-height: 200px;
+  gap: 16px 20px;
+  padding: 16px 0;
+  min-height: 160px;
 
-  .keyword-item {
-    font-weight: 600;
-    transition: all 0.3s;
+  .keyword-tag {
+    font-weight: 700;
+    color: var(--ds-primary);
     cursor: pointer;
-    display: flex;
+    transition: var(--ds-transition);
+    display: inline-flex;
     align-items: baseline;
-    gap: 4px;
+    gap: 2px;
 
-    .count {
-      font-size: 12px;
+    &:nth-child(3n+1) { color: var(--ds-primary); }
+    &:nth-child(3n+2) { color: var(--ds-accent); }
+    &:nth-child(3n) { color: #F59E0B; }
+
+    &:hover { transform: scale(1.12); opacity: 1 !important; }
+
+    .kw-count {
+      font-size: 10px;
       font-weight: 500;
       opacity: 0.6;
-    }
-
-    &:hover {
-      transform: scale(1.1);
-      opacity: 1 !important;
     }
   }
 }

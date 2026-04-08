@@ -1,0 +1,103 @@
+// =====================================================
+// 青研社 设计系统 - 全局 CSS 变量
+// 主色: #7C3AED (紫) | 辅色: #16A34A (绿)
+// =====================================================
+
+:root {
+  --ds-primary: #7C3AED;
+  --ds-primary-light: #A78BFA;
+  --ds-primary-lighter: #EDE9FE;
+  --ds-primary-dark: #5B21B6;
+  --ds-accent: #16A34A;
+  --ds-accent-light: #BBF7D0;
+  --ds-bg: #FAF5FF;
+  --ds-surface: #FFFFFF;
+  --ds-surface-2: #F5F3FF;
+  --ds-border: #DDD6FE;
+  --ds-text-1: #1E1B4B;
+  --ds-text-2: #4C1D95;
+  --ds-text-3: #7C3AED;
+  --ds-muted: #6B7280;
+  --ds-danger: #DC2626;
+  --ds-warning: #D97706;
+  --ds-radius: 16px;
+  --ds-radius-sm: 10px;
+  --ds-radius-lg: 24px;
+  --ds-shadow: 0 4px 20px rgba(124, 58, 237, 0.08);
+  --ds-shadow-md: 0 8px 32px rgba(124, 58, 237, 0.12);
+  --ds-shadow-lg: 0 16px 48px rgba(124, 58, 237, 0.16);
+  --ds-transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+html.dark {
+  --ds-bg: #0F0A1E;
+  --ds-surface: #1A1030;
+  --ds-surface-2: #231640;
+  --ds-border: #3B2F6E;
+  --ds-text-1: #F5F3FF;
+  --ds-text-2: #C4B5FD;
+  --ds-muted: #9CA3AF;
+  --ds-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --ds-shadow-md: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+// 通用工具类
+.ds-card {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius);
+  box-shadow: var(--ds-shadow);
+}
+
+.ds-page {
+  max-width: 1100px;
+  margin: 28px auto;
+  padding: 0 24px 48px;
+}
+
+.ds-page-header {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  .page-title {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--ds-text-1);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .title-accent {
+      display: inline-block;
+      width: 6px;
+      height: 28px;
+      background: linear-gradient(to bottom, var(--ds-primary), var(--ds-primary-light));
+      border-radius: 3px;
+    }
+  }
+}
+
+.ds-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background: linear-gradient(135deg, var(--ds-primary), var(--ds-primary-light));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: var(--ds-transition);
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.35);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(124, 58, 237, 0.45);
+  }
+}

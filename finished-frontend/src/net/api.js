@@ -67,7 +67,6 @@ const doPost = (url, data, header, success, failure = defaultFailure, error = de
             failure(res.data.message, res.data.code, url)
         }
     }).catch(err => {
-        console.log(err)
         error(err)
     })
 }
@@ -76,6 +75,20 @@ const post = (url, data, success, failure = defaultFailure) => {
     doPost(url, data, {
         "Authorization": `Bearer ${getToken()}`,
     }, success, failure)
+}
+
+const put = (url, data, success, failure = defaultFailure, error = defaultError) => {
+    axios.put(baseURL + url, data, {
+        headers: { "Authorization": `Bearer ${getToken()}` }
+    }).then((res) => {
+        if (res.data.code === 200) {
+            success(res.data.data)
+        } else {
+            failure(res.data.message, res.data.code, url)
+        }
+    }).catch(err => {
+        error(err)
+    })
 }
 
 const del = (url, success, failure = defaultFailure, error = defaultError) => {
@@ -93,24 +106,28 @@ const del = (url, success, failure = defaultFailure, error = defaultError) => {
 }
 
 const login = (username, password, remember) => {
-    doPost("/api/auth/login", {
-        username: username,
-        password: password
-    }, {
+    const formData = new URLSearchParams();
+    formData.append("username", username);
+    formData.append("password", password);
+    doPost("/api/auth/login", formData, {
         "Content-Type": "application/x-www-form-urlencoded"
     }, (data) => {
         storeToken(data.token, remember, data.expireTime);
         ElMessage.success({ message: `欢迎用户${data.username}登录成功`, plain: true })
-        router.push("/index")
+        router.push("/home")
     })
 }
 
-const logout = () => {
+const logout = (success) => {
     doGet("/api/auth/logout", {
         "Authorization": `Bearer ${getToken()}`
-    }, (data) => {
+    }, () => {
         deleteToken()
-        router.push("/")
+        if (success) {
+            success()
+        } else {
+            router.push("/login")
+        }
     })
 }
 
@@ -118,8 +135,4 @@ const askCodeForType = (email, type, success) => {
     doGet(`/api/auth/ask-code?email=${email}&type=${type}`, {}, success)
 }
 
-const isLogin = () => {
-    return getToken()
-}
-
-export { baseURL, doGet, doPost, login, logout, askCodeForType, isLogin, get, post, del, getToken }
+export { baseURL, doGet, doPost, login, logout, askCodeForType, get, post, put, del, getToken }

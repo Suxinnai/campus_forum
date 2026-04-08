@@ -1,90 +1,105 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getToken, isLogin } from "@/net/api.js";
+import { getToken } from "@/net/api.js";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: "/",
+      redirect: "/login"
+    },
+    {
+      path: "/index/:pathMatch(.*)*",
+      redirect: to => {
+        const pathMatch = to.params.pathMatch
+        const suffix = Array.isArray(pathMatch)
+          ? pathMatch.join("/")
+          : (pathMatch || "")
+        return suffix ? `/home/${suffix}` : "/home"
+      }
+    },
+    {
       path: '/',
-      name: 'welcome',
-      component: () => import("@/views/WelcomeView.vue"),
+      name: 'auth',
+      component: () => import("@/views/AuthView.vue"),
       children: [
         {
-          path: "",
-          name: "welcome-login",
+          path: "login",
+          name: "auth-login",
           component: () => import("@/views/welcome/LoginView.vue")
         }, {
-          path: "/register",
-          name: "welcome-register",
+          path: "register",
+          name: "auth-register",
           component: () => import("@/views/welcome/RegisterView.vue")
         }, {
-          path: "/reset",
-          name: "welcome-reset",
+          path: "reset",
+          name: "auth-reset",
           component: () => import("@/views/welcome/ResetView.vue")
         }
       ]
     }, {
-      path: "/index",
-      name: "index",
-      component: () => import("@/views/IndexView.vue"),
+      path: "/home",
+      name: "home",
+      component: () => import("@/views/HomeView.vue"),
       children: [
         {
           path: "",
-          name: "topics",
-          component: () => import("@/views/forum/Forum.vue"),
+          name: "home-topics",
+          component: () => import("@/views/forum/ForumView.vue"),
           children: [
             {
               path: "",
-              name: "topic-list",
-              component: () => import("@/views/forum/TopicList.vue")
+              name: "home-topic-list",
+              component: () => import("@/views/forum/TopicListView.vue")
             },
             {
-              path: "topic-detail/:tid",
-              name: "topic-detail",
-              component: () => import("@/views/forum/TopicDetail.vue")
+              path: "topic/:tid",
+              name: "home-topic-detail",
+              component: () => import("@/views/forum/TopicDetailView.vue")
             },
           ]
         },
         {
+          path: "user",
+          name: "home-user",
+          component: () => import("@/views/forum/UserIndexView.vue")
+        }, {
+          path: "collections",
+          name: "home-collections",
+          component: () => import("@/views/forum/CollectView.vue")
+        },
+        {
           path: "user-setting",
-          name: "user-setting",
-          component: () => import("@/views/setting/UserSetting.vue")
+          name: "home-user-setting",
+          component: () => import("@/views/setting/UserSettingView.vue")
         }, {
           path: "privacy-setting",
-          name: "privacy-setting",
-          component: () => import("@/views/setting/PrivacySetting.vue")
+          name: "home-privacy-setting",
+          component: () => import("@/views/setting/PrivacySettingView.vue")
         }, {
           path: "resource",
-          name: "resource",
+          name: "home-resource",
           component: () => import("@/views/forum/ResourceView.vue")
         }, {
           path: "stat",
-          name: "stat",
+          name: "home-stat",
           component: () => import("@/views/forum/StatView.vue")
         }, {
-          path: "lost-found",
-          name: "lost-found",
-          component: () => import("@/views/forum/LostFoundView.vue")
-        }, {
           path: "activity",
-          name: "activity",
+          name: "home-activity",
           component: () => import("@/views/forum/ActivityView.vue")
         }, {
-          path: "confession",
-          name: "confession",
-          component: () => import("@/views/forum/ConfessionView.vue")
+          path: "quick-access",
+          name: "home-quick-access",
+          component: () => import("@/views/forum/QuickAccessView.vue")
         }, {
-          path: "grade",
-          name: "grade",
-          component: () => import("@/views/forum/GradeView.vue")
+          path: "feedback",
+          name: "home-feedback",
+          component: () => import("@/views/forum/FeedbackView.vue")
         }, {
-          path: "notice",
-          name: "notice",
-          component: () => import("@/views/forum/NoticeView.vue")
-        }, {
-          path: "library",
-          name: "library",
-          component: () => import("@/views/forum/LibraryView.vue")
+          path: "admin",
+          name: "home-admin",
+          component: () => import("@/views/admin/AdminView.vue")
         }
 
       ]
@@ -95,10 +110,10 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const loginStatus = getToken()
-  if (to.name && to.name.startsWith("welcome-") && loginStatus) {
-    next("/index")
-  } else if (to.fullPath.startsWith("/index") && !loginStatus) {
-    next("/")
+  if (to.name && to.name.startsWith("auth-") && loginStatus) {
+    next("/home")
+  } else if (to.fullPath.startsWith("/home") && !loginStatus) {
+    next("/login")
   } else {
     next();
   }

@@ -132,7 +132,7 @@ function getCategoryIcon(cat) {
         <span class="emoji">📚</span>
         <h2 style="margin:0; color: #6dbcf0">资源共享中心</h2>
       </div>
-      <el-button color="var(--ice-bg-gradient)" round class="action-btn" @click="openUploadDialog">
+      <el-button type="primary" round class="action-btn" @click="openUploadDialog">
         <el-icon style="margin-right: 5px"><Upload/></el-icon>
         上传资源
       </el-button>

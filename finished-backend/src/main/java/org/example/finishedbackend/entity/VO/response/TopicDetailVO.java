@@ -18,6 +18,7 @@ public class TopicDetailVO {
     User user;
     Interact interact;
     Long comments;
+    java.util.List<String> tags;
 
     @Data
     @AllArgsConstructor
