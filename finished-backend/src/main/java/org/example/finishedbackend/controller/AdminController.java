@@ -3,15 +3,11 @@ package org.example.finishedbackend.controller;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletRequest;
 import org.example.finishedbackend.entity.DTO.*;
 import org.example.finishedbackend.entity.RestBean;
 import org.example.finishedbackend.mapper.SensitiveWordMapper;
 import org.example.finishedbackend.mapper.TopicCommentMapper;
 import org.example.finishedbackend.service.*;
-import org.example.finishedbackend.mapper.ScheduleMapper;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import org.example.finishedbackend.mapper.TopicMapper;
