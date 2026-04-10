@@ -7,6 +7,7 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.example.finishedbackend.entity.DTO.AccountDTO;
 import org.example.finishedbackend.entity.DTO.ResourceDTO;
+import org.example.finishedbackend.entity.VO.response.ResourceListVO;
 import org.example.finishedbackend.entity.VO.response.ResourceVO;
 import org.example.finishedbackend.mapper.AccountMapper;
 import org.example.finishedbackend.mapper.ResourceMapper;
@@ -49,6 +50,10 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
 
             ResourceDTO dto = new ResourceDTO();
             dto.setTitle(title);
+            // 如果分类为空或"其他"，根据文件后缀自动判断
+            if (category == null || category.isBlank() || "其他".equals(category)) {
+                category = guessCategory(originalFilename);
+            }
             dto.setCategory(category);
             dto.setFileUrl(relativePath);
             dto.setFileName(originalFilename);
@@ -68,7 +73,7 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
     }
 
     @Override
-    public List<ResourceVO> listResources(int page, String category) {
+    public ResourceListVO listResources(int page, String category) {
         Page<ResourceDTO> pageQuery = new Page<>(page, 10);
         if (category != null && !category.isEmpty()) {
             this.page(pageQuery, Wrappers.<ResourceDTO>query().eq("category", category)
@@ -76,7 +81,7 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
         } else {
             this.page(pageQuery, Wrappers.<ResourceDTO>query().orderByDesc("create_time"));
         }
-        return pageQuery.getRecords().stream().map(dto -> {
+        List<ResourceVO> list = pageQuery.getRecords().stream().map(dto -> {
             AccountDTO account = accountMapper.selectById(dto.getUploaderId());
             return new ResourceVO(
                     dto.getId(),
@@ -90,6 +95,18 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
                     account != null ? account.getAvatar() : null,
                     dto.getCreateTime());
         }).toList();
+        return new ResourceListVO(list, pageQuery.getTotal());
+    }
+
+    private String guessCategory(String fileName) {
+        if (fileName == null) return "其他";
+        String ext = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
+        return switch (ext) {
+            case "ppt", "pptx", "key" -> "课件";
+            case "pdf", "doc", "docx", "tex" -> "论文";
+            case "md", "txt", "odt", "rtf", "pages" -> "笔记";
+            default -> "其他";
+        };
     }
 
     @Override
@@ -103,5 +120,33 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
         Path path = Paths.get(storagePath + dto.getFileUrl());
         Files.copy(path, stream);
         return dto;
+    }
+
+    @Override
+    public void collectResource(int rid, int uid, boolean state) {
+        if (state) {
+            ((ResourceMapper) baseMapper).addCollect(rid, uid);
+        } else {
+            ((ResourceMapper) baseMapper).deleteCollect(rid, uid);
+        }
+    }
+
+    @Override
+    public boolean hasCollected(int rid, int uid) {
+        return ((ResourceMapper) baseMapper).userCollectCount(rid, uid) > 0;
+    }
+
+    @Override
+    public List<ResourceVO> listCollectedResources(int uid) {
+        return ((ResourceMapper) baseMapper).collectResources(uid).stream().map(dto -> {
+            AccountDTO account = accountMapper.selectById(dto.getUploaderId());
+            return new ResourceVO(
+                    dto.getId(), dto.getTitle(), dto.getCategory(),
+                    dto.getFileName(), dto.getFileSize(), dto.getDownloadCount(),
+                    dto.getDescription(),
+                    account != null ? account.getUsername() : "未知用户",
+                    account != null ? account.getAvatar() : null,
+                    dto.getCreateTime());
+        }).toList();
     }
 }

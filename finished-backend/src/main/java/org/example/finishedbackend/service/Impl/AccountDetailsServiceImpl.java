@@ -28,7 +28,16 @@ public class AccountDetailsServiceImpl extends ServiceImpl<AccountDetailsMapper,
         AccountDTO accountDTO = accountService.findAccountByUsernameOrEmail(vo.getUsername());
         if (accountDTO == null || accountDTO.getId() == id) {
             accountService.update().eq("id", id).set("username", vo.getUsername()).update();
-            this.saveOrUpdate(new AccountDetailsDTO(id, vo.getGender(), vo.getPhone(), vo.getQq(), vo.getDesc()));
+            AccountDetailsDTO details = this.findAccountDetailsById(id);
+            if (details == null) {
+                details = new AccountDetailsDTO();
+                details.setId(id);
+            }
+            details.setGender(vo.getGender());
+            details.setPhone(vo.getPhone());
+            details.setQq(vo.getQq());
+            details.setDesc(vo.getDesc());
+            this.saveOrUpdate(details);
             return true;
         }
         return false;

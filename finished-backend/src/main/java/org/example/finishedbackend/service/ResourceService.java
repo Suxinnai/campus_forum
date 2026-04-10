@@ -2,6 +2,7 @@ package org.example.finishedbackend.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.example.finishedbackend.entity.DTO.ResourceDTO;
+import org.example.finishedbackend.entity.VO.response.ResourceListVO;
 import org.example.finishedbackend.entity.VO.response.ResourceVO;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -18,10 +19,14 @@ public interface ResourceService extends IService<ResourceDTO> {
     /**
      * 分页查询资源列表
      */
-    List<ResourceVO> listResources(int page, String category);
+    ResourceListVO listResources(int page, String category);
 
     /**
      * 下载资源（将文件流写入 OutputStream）
      */
     ResourceDTO downloadResource(int id, OutputStream stream) throws Exception;
+
+    void collectResource(int rid, int uid, boolean state);
+    boolean hasCollected(int rid, int uid);
+    List<ResourceVO> listCollectedResources(int uid);
 }

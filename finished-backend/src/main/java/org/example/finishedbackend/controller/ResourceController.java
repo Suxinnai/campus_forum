@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.example.finishedbackend.entity.DTO.ResourceDTO;
 import org.example.finishedbackend.entity.RestBean;
+import org.example.finishedbackend.entity.VO.response.ResourceListVO;
 import org.example.finishedbackend.entity.VO.response.ResourceVO;
 import org.example.finishedbackend.service.ResourceService;
 import org.springframework.web.bind.annotation.*;
@@ -43,9 +44,9 @@ public class ResourceController {
      * 分页查询资源列表
      */
     @GetMapping("/list")
-    public RestBean<List<ResourceVO>> list(@RequestParam(defaultValue = "1") int page,
+    public RestBean<ResourceListVO> list(@RequestParam(defaultValue = "1") int page,
             @RequestParam(required = false) String category) {
-        List<ResourceVO> list = resourceService.listResources(page, category);
+        ResourceListVO list = resourceService.listResources(page, category);
         return RestBean.success(list, "获取资源列表成功");
     }
 
@@ -68,5 +69,24 @@ public class ResourceController {
             log.error("资源下载失败：{}", e.getMessage());
             response.setStatus(500);
         }
+    }
+
+    @PostMapping("/collect")
+    public RestBean<Void> collect(@RequestParam int rid,
+            @RequestParam boolean state,
+            @RequestAttribute("id") int uid) {
+        resourceService.collectResource(rid, uid, state);
+        return RestBean.success(null);
+    }
+
+    @GetMapping("/is-collected")
+    public RestBean<Boolean> isCollected(@RequestParam int rid,
+            @RequestAttribute("id") int uid) {
+        return RestBean.success(resourceService.hasCollected(rid, uid), null);
+    }
+
+    @GetMapping("/my-collects")
+    public RestBean<List<ResourceVO>> myCollects(@RequestAttribute("id") int uid) {
+        return RestBean.success(resourceService.listCollectedResources(uid), null);
     }
 }

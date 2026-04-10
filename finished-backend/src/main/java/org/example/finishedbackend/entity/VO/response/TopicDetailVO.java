@@ -18,6 +18,8 @@ public class TopicDetailVO {
     User user;
     Interact interact;
     Long comments;
+    int like;
+    int collect;
     java.util.List<String> tags;
 
     @Data

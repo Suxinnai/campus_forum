@@ -56,7 +56,7 @@ const doGet = (url, header, success, failure = defaultFailure, error = defaultEr
 const get = (url, success, failure = defaultFailure) => {
     doGet(url, {
         "Authorization": `Bearer ${getToken()}`,
-    }, success)
+    }, success, failure)
 }
 
 const doPost = (url, data, header, success, failure = defaultFailure, error = defaultError) => {

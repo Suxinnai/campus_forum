@@ -13,6 +13,9 @@ import org.example.finishedbackend.entity.VO.response.*;
 import org.example.finishedbackend.service.TopicService;
 import org.example.finishedbackend.service.WeatherService;
 import org.example.finishedbackend.service.RecommendService;
+import org.example.finishedbackend.service.NotificationService;
+import org.example.finishedbackend.service.AccountService;
+import org.example.finishedbackend.entity.DTO.AccountDTO;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Date;
@@ -30,6 +33,12 @@ public class ForumController {
 
     @Resource
     RecommendService recommendService;
+
+    @Resource
+    NotificationService notificationService;
+
+    @Resource
+    AccountService accountService;
 
     @GetMapping("/weather")
     public RestBean<WeatherVO> weather(double longitude, double latitude) {
@@ -66,9 +75,10 @@ public class ForumController {
     @GetMapping("/topic")
     public RestBean<TopicDetailVO> topic(@RequestParam @Min(0) int tid,
             @RequestAttribute("id") int id) {
-        // 记录浏览行为（权重 +1）
+        TopicDetailVO vo = topic.getTopic(tid, id);
+        if (vo == null) return RestBean.failure(404, "帖子不存在");
         recommendService.recordBehavior(id, tid, "view");
-        return RestBean.success(topic.getTopic(tid, id), null);
+        return RestBean.success(vo, null);
     }
 
     @PostMapping("/interact")
@@ -77,9 +87,22 @@ public class ForumController {
             @RequestParam boolean state,
             @RequestAttribute("id") int id) {
         topic.interact(new Interact(tid, id, new Date(), type), state);
-        // 记录点赞/收藏行为
         if (state) {
             recommendService.recordBehavior(id, tid, type);
+            // 点赞通知
+            if ("like".equals(type)) {
+                TopicDetailVO detail = topic.getTopic(tid, id);
+                if (detail != null && detail.getUser() != null) {
+                    int authorId = detail.getUser().getId();
+                    if (authorId != id) {
+                        AccountDTO liker = accountService.findAccountById(id);
+                        String likerName = liker != null ? liker.getUsername() : "有人";
+                        notificationService.addNotification(authorId, "收到一个赞",
+                                likerName + " 赞了你的帖子「" + detail.getTitle() + "」",
+                                "warning", "/home/topic/" + tid);
+                    }
+                }
+            }
         }
         return RestBean.success(null);
     }
@@ -126,5 +149,11 @@ public class ForumController {
             @RequestAttribute("id") int uid) {
         String result = topic.deleteTopic(uid, id);
         return result == null ? RestBean.success("帖子删除成功") : RestBean.failure(403, result);
+    }
+
+    @GetMapping("/search")
+    public RestBean<List<TopicPreviewVO>> search(@RequestParam String keyword,
+            @RequestParam @Min(0) int page) {
+        return RestBean.success(topic.searchTopics(keyword, page), null);
     }
 }

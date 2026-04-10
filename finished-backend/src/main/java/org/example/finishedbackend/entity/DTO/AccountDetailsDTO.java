@@ -20,4 +20,5 @@ public class AccountDetailsDTO {
     String qq;
     @TableField("`desc`")
     String desc;
+    String cover;
 }

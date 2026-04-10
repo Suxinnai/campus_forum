@@ -22,12 +22,12 @@ const rules = {
 function submitFeedback() {
   formRef.value.validate((valid) => {
     if (valid) {
-      // In a real app we'd call an API. Here we simulate success.
-      // post("/api/user/feedback", form, () => {
-      //    isSubmitted.value = true;
-      // })
-      ElMessage.success({ message: "感谢您的反馈，我们会尽快处理！", plain: true });
-      isSubmitted.value = true;
+      post("/api/user/feedback", form, () => {
+        ElMessage.success({ message: "感谢您的反馈，我们会尽快处理！", plain: true });
+        isSubmitted.value = true;
+      }, (msg) => {
+        ElMessage.error(msg || "提交失败，请重试");
+      });
     }
   });
 }

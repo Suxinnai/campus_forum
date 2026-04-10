@@ -65,7 +65,7 @@ const inputPlaceholder = computed(() =>
 <template>
     <div class="inline-comment-editor">
         <div class="editor-shell">
-            <el-avatar :src="store.getAvatar(store.user.avatar)" :size="40" class="editor-avatar" />
+            <el-avatar :src="store.getAvatar(store.user.avatar, store.user.username)" :size="40" class="editor-avatar" />
             <div class="editor-main">
                 <div class="editor-head">
                     <div class="editor-title">{{ inputTitle }}</div>

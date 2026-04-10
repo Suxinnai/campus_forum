@@ -13,7 +13,6 @@ const activeFilter = ref('all')
 const filters = [
   { key: 'all', label: '全部' },
   { key: 'post', label: '帖子' },
-  { key: 'activity', label: '活动' },
   { key: 'resource', label: '资源' },
 ]
 

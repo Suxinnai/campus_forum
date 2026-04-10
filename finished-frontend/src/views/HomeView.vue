@@ -1,13 +1,13 @@
 <script setup>
 import { get, del, logout } from "@/net/api.js";
 import { useAppStore } from "@/stores/app-store.js";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { Bell, Check, Tent, BookOpen, BarChart2, Settings, LogOut, Sun, Moon, Home, ShieldCheck, GraduationCap, Users, Bookmark, PlusSquare, Plus, Link, MessageSquare, User, Search } from "lucide-vue-next";
 import router from "@/router/index.js";
 import axios from "axios";
 import LightCard from "@/components/LightCard.vue";
 import { useDark } from "@vueuse/core";
-import TopicEditor from "@/components/TopicEditor.vue"; // Added
+import TopicEditor from "@/components/TopicEditor.vue";
 
 const store = useAppStore();
 const loading = ref(true);
@@ -16,6 +16,7 @@ get("/api/user/info", (data) => {
   store.user = data;
   loading.value = false;
 });
+store.loadGeo();
 
 const notification = ref([]);
 const loadNotification = () => {
@@ -41,11 +42,8 @@ function deleteAllNotification() {
   del("/api/notification/delete-all", () => { loadNotification(); });
 }
 
-const getAvatar = computed(() =>
-  store.user.avatar
-    ? `${axios.defaults.baseURL}/images${store.user.avatar}`
-    : "https://www.vexipui.com/qmhc.jpg"
-);
+const getAvatar = computed(() => store.getAvatar(store.user.avatar, store.user.username));
+
 
 const dark = ref(useDark());
 const editor = ref(false); // Make editor available here
@@ -55,7 +53,7 @@ const navGroups = [
     title: "社区互动",
     items: [
       { label: "动态首页", path: "/home", icon: Home },
-      { label: "校园生活", path: "/home/activity", icon: Users },
+      { label: "校园活动", path: "/home/activity", icon: Users },
     ]
   },
   {
@@ -82,10 +80,47 @@ const adminNav = {
 };
 
 const currentPath = computed(() => router.currentRoute.value.path);
-const isAdmin = computed(() => store.user.role === 'admin');
+const isAdmin = computed(() => ['admin', 'content_admin', 'moderator'].includes(store.user.role));
+
+const searchKeyword = ref('')
+const searchResults = ref([])
+const showSearchPanel = ref(false)
+const searchLoading = ref(false)
+
+let searchTimer = null
+function handleSearchInput() {
+  clearTimeout(searchTimer)
+  const kw = searchKeyword.value.trim()
+  if (!kw) {
+    searchResults.value = []
+    showSearchPanel.value = false
+    return
+  }
+  searchLoading.value = true
+  showSearchPanel.value = true
+  searchTimer = setTimeout(() => {
+    get(`/api/forum/search?keyword=${encodeURIComponent(kw)}&page=0`, data => {
+      searchResults.value = data || []
+      searchLoading.value = false
+    }, () => {
+      searchResults.value = []
+      searchLoading.value = false
+    })
+  }, 350)
+}
 
 function handleGlobalSearch() {
-  ElMessage.info("搜索功能已准备就绪，目前在开发模式下，关键词过滤即将上线...");
+  handleSearchInput()
+}
+
+function goToSearchResult(item) {
+  showSearchPanel.value = false
+  searchKeyword.value = ''
+  router.push('/home/topic/' + item.id)
+}
+
+function closeSearchPanel() {
+  setTimeout(() => { showSearchPanel.value = false }, 200)
 }
 
 </script>
@@ -97,17 +132,40 @@ function handleGlobalSearch() {
     <header class="topbar">
       <div class="topbar-inner">
         <div class="topbar-center">
-          <div class="search-input-wrap">
+          <div class="search-input-wrap" style="position:relative">
             <Search :size="16" class="search-icon" />
-            <input 
-              type="text" 
-              placeholder="搜索感兴趣的话题、资源或校友..." 
+            <input
+              type="text"
+              v-model="searchKeyword"
+              placeholder="搜索感兴趣的话题、资源或校友..."
               class="search-inner"
+              @input="handleSearchInput"
               @keyup.enter="handleGlobalSearch"
+              @blur="closeSearchPanel"
+              @focus="searchKeyword.trim() && (showSearchPanel = true)"
             />
-            <div class="search-kbd">
+            <div class="search-kbd" v-if="!searchKeyword">
               <span class="cmd">⌘</span>
               <span>K</span>
+            </div>
+            <!-- 搜索结果下拉面板 -->
+            <div class="search-dropdown" v-if="showSearchPanel">
+              <div v-if="searchLoading" class="search-hint">搜索中...</div>
+              <div v-else-if="searchResults.length === 0" class="search-hint">未找到相关结果</div>
+              <div v-else class="search-result-list">
+                <div
+                  v-for="item in searchResults"
+                  :key="item.id"
+                  class="search-result-item"
+                  @mousedown.prevent="goToSearchResult(item)"
+                >
+                  <div class="sr-title">{{ item.title }}</div>
+                  <div class="sr-meta">
+                    <span>{{ item.username }}</span>
+                    <span>{{ new Date(item.time).toLocaleDateString() }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -157,7 +215,7 @@ function handleGlobalSearch() {
                   <el-avatar :size="40" :src="getAvatar" class="udc-avatar" />
                   <div class="udc-info">
                     <div class="udc-name">{{ store.user.username }}</div>
-                    <div class="udc-role">{{ store.user.role === 'admin' ? '系统管理员' : '认证校友' }} · 珠海</div>
+                    <div class="udc-role">{{ store.user.role === 'admin' ? '超级管理员' : store.user.role === 'moderator' ? '版主' : '认证校友' }} · {{ store.geo.city || store.geo.region || '定位中...' }}</div>
                   </div>
                 </div>
                 <div class="udc-divider"></div>
@@ -306,7 +364,7 @@ function handleGlobalSearch() {
     background: #fff;
     width: 480px;
     border-color: var(--el-color-primary-light-3);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
     .search-icon { color: var(--el-color-primary); }
     .search-kbd { opacity: 0; transform: translateX(10px); }
   }
@@ -489,18 +547,19 @@ function handleGlobalSearch() {
   
   .sb-title {
     display: block;
-    font-size: 18px;
-    font-weight: 800;
-    color: #2b3a8a;
-    letter-spacing: 0.5px;
+    font-size: 19px;
+    font-weight: 850;
+    color: #1e255e;
+    letter-spacing: 0.8px;
+    line-height: 1;
   }
   .sb-sub {
     display: block;
     font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    color: #8e95a5;
-    margin-top: 4px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: #94a3b8;
+    margin-top: 5px;
   }
 }
 
@@ -547,10 +606,12 @@ function handleGlobalSearch() {
   }
 
   &.active {
-    background: var(--el-color-primary-light-9);
-    color: var(--el-color-primary);
+    background: #eef2ff;
+    color: #4f46e5;
+    font-weight: 800;
+    box-shadow: 0 2px 10px rgba(79, 70, 229, 0.08);
     
-    .nav-icon { color: var(--el-color-primary); }
+    .nav-icon { color: #4f46e5; }
   }
 
   &.nav-admin {
@@ -568,23 +629,27 @@ function handleGlobalSearch() {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 14px 0;
+  padding: 13px 0;
   border: none;
-  border-radius: 8px;
-  background: var(--el-color-primary);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   color: #fff;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px var(--el-color-primary-light-5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35);
 
   &:hover { 
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px var(--el-color-primary-light-3);
-    background: var(--el-color-primary-dark-2); 
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.45);
+    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); 
+  }
+
+  &:active {
+    transform: translateY(0) scale(0.98);
   }
 }
 
@@ -623,5 +688,59 @@ function handleGlobalSearch() {
   cursor: pointer;
   transition: .2s;
   &:hover { opacity: 0.75; }
+}
+
+// Search Dropdown
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0; right: 0;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+  z-index: 999;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.search-hint {
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--el-text-color-placeholder);
+}
+
+.search-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-result-item {
+  padding: 12px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover { background: var(--el-fill-color-lighter); }
+
+  .sr-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--el-text-color-primary);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sr-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+  }
 }
 </style>

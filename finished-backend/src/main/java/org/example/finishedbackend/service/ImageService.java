@@ -10,6 +10,7 @@ import java.io.OutputStream;
 
 public interface ImageService extends IService<StoreImageDTO> {
     String uploadAvatar(MultipartFile file, int id) throws IOException;
+    String uploadCover(MultipartFile file, int id) throws IOException;
     String uploadImage(MultipartFile file, int id) throws IOException;
     void fetchImage(OutputStream stream, String image) throws Exception;
 }

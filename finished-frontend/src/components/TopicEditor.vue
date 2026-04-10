@@ -62,13 +62,8 @@ const submitTopic = () => {
     return
   }
   
-  // 默认选择第一个分类以满足后端要求
-  const defaultType = editor.type || store.forum.types.find(t => t.id > 0);
-  if (!defaultType) {
-    ElMessage.warning({message:"分类获取失败，请重试", plain:true})
-    return;
-  }
-  
+  const typeId = editor.type?.id ?? 0;
+
   const dummyOps = [{ insert: extractPlain(editor.text) }];
   images.value.forEach(img => {
       dummyOps.push({ insert: { image: img.url } });
@@ -83,7 +78,7 @@ const submitTopic = () => {
 
   if (props.tid === "-1") {
     post("/api/forum/create-topic", {
-      type: defaultType.id,
+      type: typeId,
       title: editor.title,
       content: payloadStr
     }, () => {
@@ -93,7 +88,7 @@ const submitTopic = () => {
   } else {
     post("/api/forum/update-topic", {
       id: parseInt(props.tid),
-      type: defaultType.id,
+      type: typeId,
       title: editor.title,
       content: payloadStr
     }, () => {

@@ -53,7 +53,7 @@ public class SecurityConfiguration {
                             "/swagger-ui/**",
                             "/v3/api-docs/**"
                     ).permitAll();
-                    config.requestMatchers("/api/admin/**").hasRole("admin");
+                    config.requestMatchers("/api/admin/**").hasAnyRole("admin", "content_admin", "moderator");
                     config.anyRequest().authenticated();
                 })
                 .formLogin(conf -> {

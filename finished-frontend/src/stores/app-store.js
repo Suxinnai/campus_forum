@@ -21,9 +21,40 @@ export const useAppStore = defineStore('app', () => {
       }
     }
   }
-  const getAvatar = (avatar) => {
-    return avatar ? `${axios.defaults.baseURL}/images${avatar}` : "https://www.vexipui.com/qmhc.jpg";
+  const geo = reactive({
+    loading: true,
+    label: "位置识别中...",
+    ip: "",
+    city: "",
+    region: "",
+  })
+
+  async function loadGeo() {
+    if (!geo.loading && geo.city) return
+    geo.loading = true
+    try {
+      const response = await fetch("https://ipapi.co/json/", {
+        headers: { Accept: "application/json" }
+      })
+      if (!response.ok) throw new Error("ipapi request failed")
+      const data = await response.json()
+      geo.ip = data.ip || ""
+      geo.city = data.city || ""
+      geo.region = data.region || ""
+      geo.label = [geo.region, geo.city].filter(Boolean).join(" · ") || "暂未识别到位置"
+    } catch (e) {
+      geo.label = "位置识别失败"
+    } finally {
+      geo.loading = false
+    }
+  }
+
+  const getAvatar = (avatar, username = 'U') => {
+    if (avatar) {
+      return `${axios.defaults.baseURL}/images${avatar}`;
+    }
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
   };
 
-  return { user, forum, findTypeById, getAvatar}
+  return { user, forum, geo, findTypeById, getAvatar, loadGeo}
 })

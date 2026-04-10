@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS db_account_details (
     phone  VARCHAR(20)  DEFAULT NULL,
     qq     VARCHAR(20)  DEFAULT NULL,
     `desc` VARCHAR(500) DEFAULT NULL,
+    cover  VARCHAR(255) DEFAULT NULL,
     FOREIGN KEY (id) REFERENCES db_account(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -335,8 +336,73 @@ CREATE TABLE IF NOT EXISTS db_sensitive_word (
 INSERT INTO db_sensitive_word (word) VALUES ('垃圾'), ('广告'), ('骗子');
 
 -- ---------------------------------------------------
--- 20. 置顶字段补丁 (如果 db_topic 中无 top 列)
--- 在已有数据库上执行此补丁； init.sql 建表时已含此列可忽略
+-- 20. 资源收藏表 (db_resource_collect) 【新增】
+-- ---------------------------------------------------
+CREATE TABLE IF NOT EXISTS db_resource_collect (
+    rid  INT      NOT NULL COMMENT '资源ID',
+    uid  INT      NOT NULL COMMENT '用户ID',
+    time DATETIME NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (rid, uid),
+    FOREIGN KEY (rid) REFERENCES db_resource(id) ON DELETE CASCADE,
+    FOREIGN KEY (uid) REFERENCES db_account(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------
+-- 21. 用户反馈表 (db_feedback) 【新增】
+-- ---------------------------------------------------
+CREATE TABLE IF NOT EXISTS db_feedback (
+    id          INT PRIMARY KEY AUTO_INCREMENT,
+    uid         INT          NOT NULL COMMENT '提交人ID',
+    type        VARCHAR(20)  NOT NULL DEFAULT 'suggestion' COMMENT 'bug/suggestion/other',
+    title       VARCHAR(100) NOT NULL,
+    content     TEXT         NOT NULL,
+    contact     VARCHAR(100) DEFAULT NULL,
+    status      VARCHAR(20)  NOT NULL DEFAULT 'pending' COMMENT 'pending/resolved',
+    create_time DATETIME     NOT NULL DEFAULT NOW(),
+    INDEX idx_uid (uid),
+    FOREIGN KEY (uid) REFERENCES db_account(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------
+-- 22. 置顶字段补丁
 -- ---------------------------------------------------
 ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `top` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否置顶 1=置顶 0=普通';
+
+-- ---------------------------------------------------
+-- 23. 用户封禁字段补丁
+-- ---------------------------------------------------
+ALTER TABLE db_account ADD COLUMN IF NOT EXISTS `banned` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否封禁 1=封禁 0=正常';
+
+-- ---------------------------------------------------
+-- 24. 帖子审核与精华字段补丁
+-- ---------------------------------------------------
+ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `status` VARCHAR(20) NOT NULL DEFAULT 'approved' COMMENT '审核状态: pending/approved/rejected';
+ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `featured` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否精华 1=精华 0=普通';
+
+-- ---------------------------------------------------
+-- 25. 版主版块字段补丁
+-- ---------------------------------------------------
+ALTER TABLE db_account ADD COLUMN IF NOT EXISTS `moderator_type` INT DEFAULT NULL COMMENT '版主负责的版块ID';
+
+-- ---------------------------------------------------
+-- 26. 校历日程表 (db_schedule) 【新增】
+-- 管理学期安排、假期、考试等校历事件
+-- ---------------------------------------------------
+CREATE TABLE IF NOT EXISTS db_schedule (
+    id          INT PRIMARY KEY AUTO_INCREMENT,
+    title       VARCHAR(100) NOT NULL COMMENT '日程标题',
+    description VARCHAR(500) DEFAULT NULL COMMENT '日程描述',
+    event_date  DATE         NOT NULL COMMENT '开始日期',
+    end_date    DATE         DEFAULT NULL COMMENT '结束日期（可选）',
+    type        VARCHAR(20)  NOT NULL DEFAULT 'event' COMMENT 'semester/exam/holiday/event',
+    create_time DATETIME     NOT NULL DEFAULT NOW()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO db_schedule (title, event_date, end_date, type, description) VALUES
+('2025-2026学年第二学期开学', '2026-02-24', NULL, 'semester', '新学期正式上课'),
+('清明节放假', '2026-04-04', '2026-04-06', 'holiday', '清明节法定假日'),
+('期中考试周', '2026-04-20', '2026-04-26', 'exam', '2025-2026学年第二学期期中考试'),
+('五一劳动节放假', '2026-05-01', '2026-05-05', 'holiday', '劳动节法定假日'),
+('期末考试周', '2026-06-20', '2026-06-30', 'exam', '2025-2026学年第二学期期末考试'),
+('暑假开始', '2026-07-05', '2026-08-30', 'holiday', '暑假');
 

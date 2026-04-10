@@ -4,7 +4,7 @@ import {
   TrendingUp, Flame, CalendarDays, Megaphone,
   Bookmark, Trash2, Quote, MoreHorizontal, RefreshCcw
 } from "lucide-vue-next";
-import { computed, reactive, ref, watch, onMounted } from "vue";
+import { computed, reactive, ref, watch, onMounted, onActivated } from "vue";
 import { get, post, del } from "@/net/api.js";
 import { useAppStore } from "@/stores/app-store.js";
 import router from "@/router/index.js";
@@ -69,6 +69,16 @@ const topics = reactive({
 
 function updateList() {
   if (topics.end) return
+  if (topics.type === -3) {
+    // 推荐接口一次性返回，不分页
+    get('/api/recommend/topics', data => {
+      if (data && data.length) {
+        data.forEach(item => topics.list.push(item))
+      }
+      topics.end = true
+    })
+    return
+  }
   get(`/api/forum/list-topic?page=${topics.page}&type=${topics.type}`, data => {
     if (data) {
       data.forEach(item => topics.list.push(item))
@@ -79,6 +89,10 @@ function updateList() {
 }
 
 get("/api/forum/top-topic", data => topics.top = data)
+
+function loadTopTopics() {
+  get("/api/forum/top-topic", data => topics.top = data)
+}
 
 function resetList() {
   topics.page = 0
@@ -92,6 +106,13 @@ watch(() => topics.type, () => {
   resetList()
 }, { immediate: true })
 
+onActivated(() => {
+  if (topics.list.length > 0) {
+    resetList()
+    loadTopTopics()
+  }
+})
+
 // Relative time helper
 function relativeTime(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
@@ -99,6 +120,19 @@ function relativeTime(dateStr) {
   if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
   return `${Math.floor(diff / 86400)}天前`;
+}
+
+function stripMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/!\[.*?\]\([^)]+\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/#{1,6}\s?/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/http[s]?:\/\/[^\s]+/g, '')
+    .replace(/localhost:\d+\/\S+/g, '')
+    .trim();
 }
 
 // Calendar
@@ -121,6 +155,26 @@ const isToday = (d) =>
   d === today.getDate() &&
   calYear.value === today.getFullYear() &&
   calMonth.value === today.getMonth();
+
+// 公告数据
+const notices = ref([])
+get('/api/notice/list', data => { notices.value = (data || []).slice(0, 5) })
+
+// 活动/校历数据
+const activities = ref([])
+get('/api/activity/list', data => {
+  const now = new Date()
+  activities.value = (data || [])
+    .filter(a => new Date(a.endTime) >= now)
+    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+    .slice(0, 3)
+})
+
+function formatActivityTime(d) {
+  if (!d) return ''
+  const date = new Date(d)
+  return `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`
+}
 </script>
 
 <template>
@@ -147,7 +201,7 @@ const isToday = (d) =>
 
         <!-- 快速发帖器 -->
         <div class="quick-publish-bar" @click="handleQuickPublish">
-          <el-avatar :size="36" :src="store.getAvatar(store.user.avatar)" />
+          <el-avatar :size="36" :src="store.getAvatar(store.user.avatar, store.user.username)" />
           <div class="qp-input">有什么新鲜事想和大家分享？</div>
           <button class="qp-btn"><SquarePen :size="16" /> 发布</button>
         </div>
@@ -155,6 +209,7 @@ const isToday = (d) =>
         <!-- Tab 筛选栏 -->
         <div class="topic-tabs">
           <div class="tab-item" :class="{ active: topics.type === 0 }" @click="topics.type = 0">全部</div>
+          <div class="tab-item" :class="{ active: topics.type === -3 }" @click="topics.type = -3">✨ 推荐</div>
           <div class="tab-item" :class="{ active: topics.type === -1 }" @click="topics.type = -1">🔥 热门</div>
           <div class="tab-item" :class="{ active: topics.type === -2 }" @click="topics.type = -2">🕐 最新</div>
         </div>
@@ -191,13 +246,13 @@ const isToday = (d) =>
                       <span class="post-time">{{ relativeTime(item.time) }}</span>
                     </div>
                     <h3 class="post-title">{{ item.title }}</h3>
-                    <p class="post-excerpt">{{ item.text }}</p>
+                    <p class="post-excerpt">{{ stripMarkdown(item.text) }}</p>
                   </div>
               </div>
 
               <div class="post-footer">
                 <div class="footer-left">
-                  <el-avatar :size="20" :src="store.getAvatar(item.avatar)" class="compact-avatar" />
+                  <el-avatar :size="20" :src="store.getAvatar(item.avatar, item.username)" class="compact-avatar" />
                   <span class="meta-name">{{ item.username }}</span>
                 </div>
                 <div class="footer-actions">
@@ -274,17 +329,16 @@ const isToday = (d) =>
             </div>
             <div class="today-schedule">
               <div class="schedule-title">
-                <span>今日安排</span>
+                <span>近期活动</span>
                 <i>{{ calMonthNum }}月{{ today.getDate() }}日</i>
               </div>
               <ul class="schedule-list">
-                <li class="schedule-item">
-                  <div class="s-time">14:00</div>
-                  <div class="s-event">计算机学院学术讲座</div>
+                <li v-for="act in activities" :key="act.id" class="schedule-item" @click="router.push('/home/activity')" style="cursor:pointer">
+                  <div class="s-time">{{ formatActivityTime(act.startTime) }}</div>
+                  <div class="s-event">{{ act.title }}</div>
                 </li>
-                <li class="schedule-item">
-                  <div class="s-time">19:30</div>
-                  <div class="s-event">青研社技术分享会</div>
+                <li v-if="!activities.length" class="schedule-item">
+                  <div class="s-event" style="color:var(--el-text-color-placeholder)">暂无近期活动</div>
                 </li>
               </ul>
             </div>
@@ -297,11 +351,12 @@ const isToday = (d) =>
               网站公告
             </div>
             <div class="bulletin-list">
-              <div class="bulletin-item">
-                <p class="b-title" style="margin-bottom:0">欢迎使用青研社校园论坛</p>
+              <div v-for="n in notices" :key="n.id" class="bulletin-item">
+                <span v-if="n.isTop === 1" class="b-top-tag">置顶</span>
+                <p class="b-title" style="margin-bottom:0">{{ n.title }}</p>
               </div>
-              <div class="bulletin-item">
-                <p class="b-title" style="margin-bottom:0">如有问题请联系管理员</p>
+              <div v-if="!notices.length" class="bulletin-item">
+                <p class="b-title" style="margin-bottom:0;color:var(--el-text-color-placeholder)">暂无公告</p>
               </div>
             </div>
           </div>
@@ -884,6 +939,18 @@ const isToday = (d) =>
   }
 }
 
+.b-top-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  color: #7C3AED;
+  background: #EDE9FE;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
 .b-title {
   font-size: 13px;
   font-weight: 700;
@@ -1045,3 +1112,5 @@ const isToday = (d) =>
   .hero-overlay { padding: 20px; h1 { font-size: 20px; } }
 }
 </style>
+
+

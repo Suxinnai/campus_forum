@@ -40,7 +40,20 @@ public interface TopicMapper extends BaseMapper<TopicDTO> {
      int userInteractCount(int tid, int uid, String type);
 
     @Select("""
-            select * from db_topic_interact_collect left join db_topic on tid = db_topic.id 
+            select count(*)
+            from db_topic_interact_like l
+            inner join db_topic t on l.tid = t.id
+            where t.uid = #{uid}
+            """)
+    int receivedLikeCount(int uid);
+
+    @Select("""
+            select count(*) from db_topic_interact_collect where uid = #{uid}
+            """)
+    int collectCountByUid(int uid);
+
+    @Select("""
+            select db_topic.* from db_topic_interact_collect left join db_topic on tid = db_topic.id
             where db_topic_interact_collect.uid = #{uid}
             """)
     List<TopicDTO> collectTopics(int uid);

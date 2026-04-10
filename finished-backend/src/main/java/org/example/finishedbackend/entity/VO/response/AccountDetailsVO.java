@@ -10,4 +10,5 @@ public class AccountDetailsVO {
     String phone;
     String qq;
     String desc;
+    String cover;
 }

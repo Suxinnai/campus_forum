@@ -180,7 +180,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDTO>
         if (existsAccountByUsername(username))
             return "该用户名已被使用";
         AccountDTO dto = new AccountDTO(0, vo.getUsername(), encoder.encode(vo.getPassword()), null, email, "user",
-                new Date());
+                new Date(), 0, null);
         if (this.baseMapper.insert(dto) > 0) {
             stringRedisTemplate.delete(Const.VERIFY_EMAIL_CODE + email);
             privacyMapper.insert(new AccountPrivacyDTO(dto.getId()));

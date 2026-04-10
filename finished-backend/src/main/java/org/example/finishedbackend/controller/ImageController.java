@@ -22,13 +22,24 @@ public class ImageController {
     @PostMapping("/avatar")
     public RestBean<String> avatar(@RequestParam("file") MultipartFile file,
                                    @RequestAttribute("id") int id) throws IOException {
-        // 如果文件大小大于1MB 就不允许上传
-        if (file.getSize() > 1024 * 1024) {
-            return RestBean.failure(400, "图片上传大小不允许大于1MB");
+        // 如果文件大小大于2MB 就不允许上传
+        if (file.getSize() > 1024 * 1024 * 2) {
+            return RestBean.failure(400, "图片上传大小不允许大于2MB");
         }
         log.info("正在进行头像上传操作...");
         String s = imageService.uploadAvatar(file, id);
         return s != null ? RestBean.success(s, "头像上传成功！") : RestBean.failure(400, "头像上传失败");
+    }
+
+    @PostMapping("/cover")
+    public RestBean<String> cover(@RequestParam("file") MultipartFile file,
+                                  @RequestAttribute("id") int id) throws IOException {
+        if (file.getSize() > 1024 * 1024 * 5) {
+            return RestBean.failure(400, "封面图片大小不允许大于5MB");
+        }
+        log.info("正在进行封面上传操作...");
+        String s = imageService.uploadCover(file, id);
+        return s != null ? RestBean.success(s, "封面上传成功！") : RestBean.failure(400, "封面上传失败");
     }
 
     @PostMapping("/cache")

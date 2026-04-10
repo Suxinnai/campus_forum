@@ -12,6 +12,7 @@ import java.util.Date;
 @Data
 @TableName("db_account")
 @AllArgsConstructor
+@lombok.NoArgsConstructor
 public class AccountDTO {
     @TableId(type = IdType.AUTO)
     Integer id;
@@ -22,4 +23,7 @@ public class AccountDTO {
     String role;
     @TableField("register_time")
     Date create_time;
+    Integer banned;
+    @TableField("moderator_type")
+    Integer moderatorType;
 }

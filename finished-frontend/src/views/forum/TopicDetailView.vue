@@ -1,509 +1,698 @@
 <script setup>
 import {get, post, del} from "@/net/api.js";
 import {useRoute} from "vue-router";
-import {reactive, ref, onMounted, nextTick} from "vue";
-import {
-  ArrowLeft, EditPen, Female, Male, Pointer, Star,
-  Plus, ChatSquare, Delete, Share, Promotion, User
-} from "@element-plus/icons-vue";
+import {reactive, ref, onMounted, nextTick, computed} from "vue";
+import { ArrowLeft, EditPen, Female, Male, Delete, Promotion } from "@element-plus/icons-vue";
+import { ThumbsUp, Star, Share2, MessageCircle, Send, CornerDownRight } from "lucide-vue-next";
 import router from "@/router/index.js";
-import TopicTag from "@/components/TopicTag.vue";
 import {ElMessage, ElMessageBox} from "element-plus";
 import {useAppStore} from "@/stores/app-store.js";
 import TopicEditor from "@/components/TopicEditor.vue";
-import TopicCommentEditor from "@/components/TopicCommentEditor.vue";
-import DOMPurify from "dompurify";
+import { MdPreview } from 'md-editor-v3';
+import 'md-editor-v3/lib/preview.css';
 
 const route = useRoute();
 const store = useAppStore();
 const loading = ref(true);
 
-const topic = reactive({
-  data: null,
-  like: false,
-  collect: false,
-  comments: null,
-  page: 1
-})
+const topic = reactive({ data: null, like: false, collect: false, comments: [], page: 1 });
+const tid = parseInt(route.params.tid); // 转化为数字，确保 @Min(1) 验证通过
 
-const tid = route.params.tid;
+const commentText = ref("");
+const showReplyId = ref(null);
+const replyText = ref("");
+const edit = ref(false);
 
 function init() {
   loading.value = true;
+  refreshTopicState(1, true);
+}
+
+function refreshTopicState(page = topic.page || 1, stopLoading = false) {
   get(`/api/forum/topic?tid=${tid}`, data => {
     topic.data = data;
     topic.like = data.interact?.like || false;
     topic.collect = data.interact?.collect || false;
-    loadComments(1);
-    loading.value = false;
+    loadComments(page, stopLoading);
   }, () => {
-    ElMessage.error({message: "网络异常，无法获取详情", plain: true});
+    ElMessage.error("网络异常，无法获取详情");
     loading.value = false;
-  })
+  });
 }
 
 onMounted(() => init());
 
-import { MdPreview } from 'md-editor-v3';
-import 'md-editor-v3/lib/preview.css';
-
-// 鲁棒内容渲染器：处理 JSON 泄露的关键
-const renderContent = (content) => {
-  if (!content) return "";
-  let html = "";
-  try {
-    const parsed = typeof content === 'string' ? JSON.parse(content) : content;
-
-    if (parsed.md) return "";
-
-    if (parsed.ops) {
-      let result = "";
-      parsed.ops.forEach(op => {
-        if (typeof op.insert === 'string') {
-          // 先转义基础 HTML 实体
-          let text = op.insert.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-          if (op.attributes) {
-             if (op.attributes.bold) text = `<b>${text}</b>`;
-             if (op.attributes.link) {
-               const safeHref = DOMPurify.sanitize(op.attributes.link);
-               text = `<a href="${safeHref}" style="color:#409eff" target="_blank" rel="noopener noreferrer">${text}</a>`;
-             }
-          }
-          result += text;
-        }
-      });
-      html = result.replace(/\n/g, '<br/>');
+// ======= 内容解析 =======
+function decodeStructuredContent(content) {
+  let decoded = content;
+  for (let i = 0; i < 4; i++) {
+    if (typeof decoded !== 'string') break;
+    const normalized = decoded.trim();
+    try {
+      decoded = JSON.parse(normalized);
+      continue;
+    } catch (e) {
+      if (/[\r\n\t]/.test(normalized)) {
+        decoded = normalized
+          .replace(/\r/g, '\\r')
+          .replace(/\n/g, '\\n')
+          .replace(/\t/g, '\\t');
+        continue;
+      }
+      if (normalized.startsWith('"') && normalized.endsWith('"')) {
+        decoded = normalized.slice(1, -1);
+        continue;
+      }
+      if (normalized.includes('\\"')) {
+        decoded = normalized
+          .replace(/\\"/g, '"')
+          .replace(/\r/g, '\\r')
+          .replace(/\n/g, '\\n')
+          .replace(/\t/g, '\\t')
+          .replace(/\\\\/g, '\\');
+        continue;
+      }
+      break;
     }
-  } catch(e) {
-    // 解析失败，转义后返回
-    html = content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
-  return DOMPurify.sanitize(html);
+  return decoded;
 }
 
-const isMarkdown = (content) => {
-  try {
-    const p = typeof content === 'string' ? JSON.parse(content) : content;
-    return !!p.md;
-  } catch(e) { return false; }
+function parseContent(content) {
+  if (!content) return { type: 'empty', md: '', ops: [], images: [], tags: [] };
+  const decoded = decodeStructuredContent(content);
+  if (decoded && typeof decoded === 'object') {
+    if (typeof decoded.md === 'string') {
+      return { type: 'md', md: decoded.md, images: decoded.images || [], tags: decoded.tags || [] };
+    }
+    if (Array.isArray(decoded.ops)) {
+      return { type: 'ops', ops: decoded.ops, images: decoded.images || [], tags: decoded.tags || [] };
+    }
+  }
+  return { type: 'plain', text: typeof decoded === 'string' ? decoded : String(content) };
 }
 
-const extractMd = (content) => {
-  try {
-    const p = typeof content === 'string' ? JSON.parse(content) : content;
-    return p.md || "";
-  } catch(e) { return ""; }
+function renderOps(ops) {
+  if (!ops || !ops.length) return '';
+  let result = '';
+  for (const op of ops) {
+    if (typeof op.insert === 'string') {
+      let text = op.insert
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      if (op.attributes) {
+        if (op.attributes.bold)   text = `<strong>${text}</strong>`;
+        if (op.attributes.italic) text = `<em>${text}</em>`;
+        if (op.attributes.underline) text = `<u>${text}</u>`;
+        if (op.attributes.link) {
+          const href = op.attributes.link.replace(/"/g, '');
+          text = `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#409eff">${text}</a>`;
+        }
+      }
+      result += text;
+    }
+  }
+  return result.replace(/\n/g, '<br/>');
 }
 
-const extractImages = (content) => {
-  try {
-    const p = typeof content === 'string' ? JSON.parse(content) : content;
-    return p.images || [];
-  } catch(e) { return []; }
-}
-
-const edit = ref(false)
-const commentEditorRef = ref(null)
-const comment = reactive({
-  quote: null
-})
-
+// ======= 互动 =======
 function interact(type, message) {
   post(`/api/forum/interact?tid=${tid}&type=${type}&state=${!topic[type]}`, null, () => {
-    topic[type] = !topic[type];
-    if (topic[type]) {
-       topic.data[type]++;
-    } else {
-       topic.data[type]--;
-    }
-    ElMessage.success({message: `${message}成功`, plain: true});
-  })
+    ElMessage.success(`${message}成功`);
+    refreshTopicState(topic.page);
+  });
 }
 
 function deleteTopic() {
-  ElMessageBox.confirm('确定要永久删除这篇帖子吗？', '删除提醒', {
-    type: 'warning',
-    confirmButtonText: '确定',
-    cancelButtonText: '取消'
-  }).then(() => {
+  ElMessageBox.confirm('确定要永久删除这篇帖子吗？', '删除提醒', { type: 'warning' }).then(() => {
     del(`/api/forum/delete-topic?id=${tid}`, () => {
-      ElMessage.success({message: '帖子已删除', plain: true})
-      router.push('/home')
-    })
-  })
+      ElMessage.success('帖子已删除');
+      router.push('/home');
+    });
+  }).catch(() => {});
 }
 
 async function copyUrl() {
   await navigator.clipboard.writeText(window.location.href);
-  ElMessage.success({message: "链接已复制", plain: true})
+  ElMessage.success("链接已复制");
 }
 
-function loadComments(page) {
-  topic.page = page
+// ======= 评论 =======
+function loadComments(page, stopLoading = false) {
+  topic.page = page;
   get(`/api/forum/comments?tid=${tid}&page=${page - 1}`, data => {
-    topic.comments = data;
-  })
+    topic.comments = data || [];
+    if (stopLoading) {
+      loading.value = false;
+    }
+  }, () => {
+    if (stopLoading) {
+      loading.value = false;
+    }
+  });
 }
 
-function onCommentAdd() {
-    comment.quote = null;
-    init(); // 刷新数据
+function textToContent(text) {
+  // 生成标准 Quill Delta 格式
+  return JSON.stringify({ ops: [{ insert: text }, { insert: '\n' }] });
 }
 
-function openCommentEditor(reply = null) {
-  comment.quote = reply
-  nextTick(() => {
-    commentEditorRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  })
+function submitMainComment() {
+  const trimmed = commentText.value.trim();
+  if (!trimmed) { ElMessage.warning("评论不能为空"); return; }
+  if (trimmed.length > 500) { ElMessage.warning("评论不能超过500字"); return; }
+  post("/api/forum/add-comment", {
+    tid,
+    quote: -1,
+    content: textToContent(trimmed)
+  }, () => {
+    ElMessage.success("评论发布成功！");
+    commentText.value = "";
+    refreshTopicState(topic.page);
+  }, err => {
+    ElMessage.error(err || "发布失败，请重试");
+  });
+}
+
+function toggleReply(item) {
+  if (showReplyId.value === item.id) {
+    showReplyId.value = null;
+    replyText.value = "";
+  } else {
+    showReplyId.value = item.id;
+    replyText.value = "";
+    nextTick(() => document.getElementById(`reply-input-${item.id}`)?.focus());
+  }
+}
+
+function submitReply(item) {
+  const trimmed = replyText.value.trim();
+  if (!trimmed) { ElMessage.warning("回复不能为空"); return; }
+  post("/api/forum/add-comment", {
+    tid,
+    quote: item.id,
+    content: textToContent(trimmed)
+  }, () => {
+    ElMessage.success("回复发布成功！");
+    replyText.value = "";
+    showReplyId.value = null;
+    refreshTopicState(topic.page);
+  }, err => {
+    ElMessage.error(err || "回复失败，请重试");
+  });
 }
 
 function deleteComment(id) {
-  del(`/api/forum/delete-comment?id=${id}`, () => {
-    ElMessage.success({message: "已删除", plain: true})
-    loadComments(topic.page)
-  })
+  ElMessageBox.confirm('确定删除这条评论吗？', { type: 'warning' }).then(() => {
+    del(`/api/forum/delete-comment?id=${id}`, () => {
+      ElMessage.success("已删除");
+      refreshTopicState(topic.page);
+    });
+  }).catch(() => {});
 }
 
 function relativeTime(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
-  if (diff < 60) return '刚刚';
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+  if (diff < 60)    return '刚刚';
+  if (diff < 3600)  return `${Math.floor(diff / 60)} 分钟前`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
   return `${Math.floor(diff / 86400)} 天前`;
 }
+
+function getCommentText(content) {
+  try {
+    const p = typeof content === 'string' ? JSON.parse(content) : content;
+    if (p && p.ops) {
+      return p.ops.map(op => (typeof op.insert === 'string' ? op.insert : '')).join('').replace(/\n$/, '');
+    }
+  } catch(e) {}
+  return content || '';
+}
+
+const likeCount    = computed(() => topic.data?.like     ?? 0);
+const collectCount = computed(() => topic.data?.collect  ?? 0);
+const commentCount = computed(() => topic.data?.comments ?? 0);
+const parsed       = computed(() => topic.data ? parseContent(topic.data.content) : null);
+const displayTags  = computed(() => topic.data?.tags?.length ? topic.data.tags : (parsed.value?.tags || []));
 </script>
 
 <template>
-  <div class="clean-topic-view" v-if="topic.data">
-    <!-- 极简顶部导航 -->
-    <div class="top-nav">
-      <div class="nav-content">
-        <el-button :icon="ArrowLeft" link @click="router.push('/home')">返回社区</el-button>
-        <el-divider direction="vertical" />
-        
-        <!-- 动态话题标签 (详情页顶部) -->
-        <div class="detail-tags-area" v-if="topic.data.tags && topic.data.tags.length">
-            <span class="main-det-tag">{{ topic.data.tags[0] }}</span>
-            <span v-for="tag in topic.data.tags.slice(1)" :key="tag" class="sub-det-tag">#{{ tag }}</span>
-        </div>
-        <span v-else class="main-det-tag" style="background: #f1f5f9; color: #64748b; border-color: #e2e8f0">未分类</span>
-        
-        <h1 class="main-title">{{ topic.data.title }}</h1>
+  <div class="tdv" v-if="topic.data">
+    <!-- 顶部导航 -->
+    <div class="tdv-nav">
+      <button class="back-btn" @click="router.push('/home')">
+        <ArrowLeft style="width:15px; margin-right:4px"/> 返回社区
+      </button>
+      <div class="nav-sep"></div>
+      <div class="tags-row" v-if="displayTags.length">
+        <span class="tag-main">{{ displayTags[0] }}</span>
+        <span v-for="t in displayTags.slice(1)" :key="t" class="tag-sub">#{{ t }}</span>
       </div>
+      <span v-else class="tag-main gray">未分类</span>
+      <h1 class="nav-title">{{ topic.data.title }}</h1>
     </div>
 
-    <div class="main-layout">
-      <!-- 左侧：稳健排版的文章 -->
-      <div class="article-section">
+    <div class="tdv-layout">
+      <!-- 主内容区 -->
+      <div class="tdv-main">
+        <!-- 文章卡片 -->
         <div class="article-card">
-          <!-- 作者条 -->
-          <div class="author-strip">
-            <el-avatar :src="store.getAvatar(topic.data.user.avatar)" :size="44" />
-            <div class="author-meta">
-              <div class="a-name">
+          <div class="author-bar">
+            <el-avatar :src="store.getAvatar(topic.data.user.avatar, topic.data.user.username)" :size="44"/>
+            <div class="ab-meta">
+              <div class="ab-name">
                 {{ topic.data.user.username }}
-                <el-icon v-if="topic.data.user.gender === 1" color="#f43f5e"><Female /></el-icon>
-                <el-icon v-if="topic.data.user.gender === 0" color="#3b82f6"><Male /></el-icon>
+                <el-icon v-if="topic.data.user.gender === 1" color="#f43f5e"><Female/></el-icon>
+                <el-icon v-if="topic.data.user.gender === 0" color="#3b82f6"><Male/></el-icon>
               </div>
-              <div class="a-time">发布于 {{ new Date(topic.data.time).toLocaleString() }}</div>
+              <div class="ab-time">发布于 {{ new Date(topic.data.time).toLocaleString() }}</div>
             </div>
-            <div style="flex: 1"></div>
-            <div class="top-interact" v-if="store.user.id === topic.data.user.id || store.user.role === 'admin'">
-              <el-button v-if="store.user.id === topic.data.user.id" :icon="EditPen" circle size="small" @click="edit = true"></el-button>
-              <el-button :icon="Delete" circle size="small" type="danger" plain @click="deleteTopic"></el-button>
+            <div style="flex:1"></div>
+            <div v-if="store.user.id === topic.data.user.id || store.user.role === 'admin' || store.user.role === 'moderator'" class="ab-ops">
+              <el-button v-if="store.user.id === topic.data.user.id" :icon="EditPen" circle size="small" @click="edit=true"/>
+              <el-button :icon="Delete" circle size="small" type="danger" plain @click="deleteTopic"/>
             </div>
           </div>
 
-          <el-divider style="margin: 20px 0" />
+          <el-divider style="margin: 16px 0"/>
 
-          <!-- 正文区 -->
+          <!-- 正文 - 根据内容类型渲染 -->
           <div class="post-body">
-            <template v-if="isMarkdown(topic.data.content)">
-              <MdPreview :modelValue="extractMd(topic.data.content)" />
-            </template>
-            <div v-else class="html-content" v-html="renderContent(topic.data.content)"></div>
-            
-            <div class="image-gallery" v-if="extractImages(topic.data.content).length">
-               <el-image v-for="img in extractImages(topic.data.content)" :src="img" :preview-src-list="extractImages(topic.data.content)" fit="cover" class="post-img" />
+            <!-- 新帖：Markdown 渲染 -->
+            <MdPreview v-if="parsed && parsed.type === 'md'"
+                       :modelValue="parsed.md"
+                       class="md-preview-area"/>
+            <!-- 旧帖：Quill Delta 渲染 -->
+            <div v-else-if="parsed && parsed.type === 'ops'"
+                 class="html-content"
+                 v-html="renderOps(parsed.ops)">
+            </div>
+            <!-- 纯文本兜底 -->
+            <div v-else class="html-content">{{ parsed?.text || '' }}</div>
+
+            <!-- 图片画廊 -->
+            <div class="img-gallery" v-if="parsed && parsed.images && parsed.images.length">
+              <el-image
+                v-for="img in parsed.images"
+                :key="img"
+                :src="img"
+                :preview-src-list="parsed.images"
+                fit="cover"
+                class="post-img"
+              />
             </div>
           </div>
 
-          <!-- 底部超稳交互条 -->
-          <div class="footer-actions">
-            <div class="btn-group">
-              <button class="action-btn" :class="{active: topic.like}" @click="interact('like', '点赞')">
-                <Pointer style="width:16px" /> <span>{{ topic.data.like || 0 }}</span>
+          <!-- 互动栏 - 优化版 -->
+          <div class="interact-bar">
+            <div class="interact-left">
+              <!-- 点赞按钮 -->
+              <button class="ib-btn like-btn" :class="{active: topic.like}" @click="interact('like','点赞')">
+                <ThumbsUp :size="15" :fill="topic.like ? 'currentColor' : 'none'"/>
+                <span>点赞</span>
+                <b class="ib-count">{{ likeCount }}</b>
               </button>
-              <button class="action-btn" :class="{active: topic.collect}" @click="interact('collect', '收藏')">
-                <Star style="width:16px" /> <span>{{ topic.collect ? '已收藏' : '收藏' }}</span>
+              <!-- 收藏按钮 -->
+              <button class="ib-btn collect-btn" :class="{active: topic.collect}" @click="interact('collect','收藏')">
+                <Star :size="15" :fill="topic.collect ? 'currentColor' : 'none'"/>
+                <span>{{ topic.collect ? '已收藏' : '收藏' }}</span>
+                <b class="ib-count">{{ collectCount }}</b>
               </button>
-              <button class="action-btn" @click="copyUrl">
-                <Share style="width:16px" /> <span>分享</span>
+              <!-- 分享按钮 -->
+              <button class="ib-btn share-btn" @click="copyUrl">
+                <Share2 :size="15"/>
+                <span>分享</span>
               </button>
+            </div>
+            <div class="interact-right">
+              <MessageCircle :size="14" style="color:#aaa"/>
+              <span class="comment-stat">{{ commentCount }} 条评论</span>
             </div>
           </div>
         </div>
 
-        <!-- 稳健评论区 -->
-        <div class="comment-card">
-          <div class="c-header">
-            <div class="h-label">讨论区 ({{ topic.data.comments }})</div>
-            <el-button type="primary" size="small" :icon="Plus" @click="openCommentEditor()">发表评论</el-button>
+        <!-- B站风格评论区 -->
+        <div class="comment-section">
+          <div class="cs-header">
+            <span class="cs-title">评论</span>
+            <span class="cs-count">{{ commentCount }}</span>
           </div>
 
-          <div ref="commentEditorRef" class="comment-editor-wrap">
-            <topic-comment-editor
-              @comment="onCommentAdd"
-              @close="comment.quote = null"
-              :tid="tid"
-              :quote="comment.quote"
+          <!-- 主评论输入框 -->
+          <div class="cs-input-wrap">
+            <el-avatar :src="store.getAvatar(store.user.avatar, store.user.username)" :size="38"/>
+            <div class="cs-input-box" :class="{focused: commentText.length > 0}">
+              <textarea
+                v-model="commentText"
+                class="cs-textarea"
+                placeholder="发一条友善的评论~"
+                maxlength="500"
+                rows="1"
+                @input="(e) => { e.target.style.height='auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }"
+              ></textarea>
+              <div class="cs-footer">
+                <span class="cs-count-text">{{ commentText.length }}/500</span>
+                <button class="cs-publish-btn" :disabled="!commentText.trim()" @click="submitMainComment">发布</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 评论列表 -->
+          <div class="cs-list">
+            <el-empty v-if="!topic.comments.length" description="暂无评论，快来抢沙发~" :image-size="60" style="padding: 30px 0"/>
+
+            <div v-for="item in topic.comments" :key="item.id" class="cs-item">
+              <el-avatar :src="store.getAvatar(item.user.avatar, item.user.username)" :size="36" class="cs-avatar"/>
+              <div class="cs-body">
+                <div class="cs-row1">
+                  <span class="cs-username">{{ item.user.username }}</span>
+                  <span class="cs-time">{{ relativeTime(item.time) }}</span>
+                </div>
+                <!-- 引用内容 -->
+                <div v-if="item.quote" class="cs-quote">
+                  <CornerDownRight :size="11"/>
+                  <span>{{ item.quote }}</span>
+                </div>
+                <!-- 评论正文 -->
+                <p class="cs-text">{{ getCommentText(item.content) }}</p>
+                <!-- 操作 -->
+                <div class="cs-actions">
+                  <button class="cs-act-btn" @click="toggleReply(item)">
+                    <MessageCircle :size="12"/> {{ showReplyId === item.id ? '取消' : '回复' }}
+                  </button>
+                  <button
+                    v-if="item.user.id === store.user.id || store.user.role === 'admin' || store.user.role === 'moderator'"
+                    class="cs-act-btn danger"
+                    @click="deleteComment(item.id)"
+                  >删除</button>
+                </div>
+                <!-- 内联回复框 -->
+                <div v-if="showReplyId === item.id" class="cs-reply-box">
+                  <input
+                    :id="`reply-input-${item.id}`"
+                    v-model="replyText"
+                    type="text"
+                    :placeholder="`回复 @${item.user.username}：`"
+                    class="cs-reply-input"
+                    maxlength="200"
+                    @keyup.enter="submitReply(item)"
+                  />
+                  <button class="cs-reply-send" @click="submitReply(item)">
+                    <Send :size="12"/> 发布
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分页 -->
+          <div class="cs-pagination" v-if="commentCount > 10">
+            <el-pagination
+              background layout="prev, pager, next"
+              v-model:current-page="topic.page"
+              @current-change="loadComments"
+              :total="commentCount"
+              :page-size="10"
             />
           </div>
-
-          <div class="c-list">
-            <div v-for="item in topic.comments" :key="item.id" class="c-item">
-              <el-avatar :src="store.getAvatar(item.user.avatar)" :size="40" />
-              <div class="c-content">
-                <div class="c-user-info">
-                  <span class="c-un">{{ item.user.username }}</span>
-                  <span class="c-tm">{{ relativeTime(item.time) }}</span>
-                </div>
-                <div v-if="item.quote" class="c-quote">
-                  「 {{ item.quote }} 」
-                </div>
-                <div class="c-text">
-                  <template v-if="isMarkdown(item.content)">
-                    <MdPreview :modelValue="extractMd(item.content)" style="font-size:14px" />
-                  </template>
-                  <div v-else v-html="renderContent(item.content)"></div>
-                </div>
-                <div class="c-actions">
-                  <el-button link size="small" @click="openCommentEditor(item)">回复</el-button>
-                  <el-button v-if="item.user.id === store.user.id" link type="danger" size="small" @click="deleteComment(item.id)">删除</el-button>
-                </div>
-              </div>
-            </div>
-            <el-empty v-if="!topic.comments?.length" description="暂无评论" :image-size="60" />
-          </div>
-          
-          <div class="pagination">
-             <el-pagination background layout="prev, pager, next" v-model:current-page="topic.page" @current-change="loadComments" :total="topic.data.comments" :page-size="10" hide-on-single-page />
-          </div>
         </div>
       </div>
 
-      <!-- 右侧：作者卡片（稳健版） -->
-      <div class="sidebar-section">
-        <div class="user-card-stable">
-           <div class="u-avatar-box">
-             <el-avatar :src="store.getAvatar(topic.data.user.avatar)" :size="64" />
-           </div>
-           <div class="u-info">
-              <div class="u-name">{{ topic.data.user.username }}</div>
-              <div class="u-desc">{{ topic.data.user.desc || '这个同学没有留下简介' }}</div>
-           </div>
-           <el-divider style="margin: 15px 0" />
-           <div class="u-details">
-             <div class="u-row"><el-icon><Promotion /></el-icon> <span>{{ topic.data.user.email || '保密' }}</span></div>
-           </div>
+      <!-- 右侧作者卡片 -->
+      <div class="tdv-sidebar">
+        <div class="author-card">
+          <el-avatar :src="store.getAvatar(topic.data.user.avatar, topic.data.user.username)" :size="64"/>
+          <div class="ac-name">{{ topic.data.user.username }}</div>
+          <div class="ac-desc">{{ topic.data.user.desc || '这个同学没有留下简介' }}</div>
+          <el-divider style="margin: 14px 0"/>
+          <div class="ac-row" v-if="topic.data.user.email">
+            <el-icon><Promotion/></el-icon>
+            <span>{{ topic.data.user.email }}</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 弹出式编辑 -->
     <topic-editor
-        :show="edit"
-        :default-text="topic.data.content"
-        :default-title="topic.data.title"
-        :default-type="topic.data.type"
-        @close="edit = false;init()"
-        :tid="tid" />
+      :show="edit"
+      :default-text="topic.data.content"
+      :default-title="topic.data.title"
+      :default-type="topic.data.type"
+      @close="edit = false; init()"
+      :tid="String(tid)"
+    />
+  </div>
+
+  <div v-else-if="loading" style="padding: 60px 20px;">
+    <el-skeleton :rows="10" animated/>
   </div>
 </template>
 
 <style lang="less" scoped>
-.clean-topic-view {
-  max-width: 1140px;
+.tdv {
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 20px 15px 100px;
+  padding: 20px 16px 80px;
 }
 
-.top-nav {
-  background: #fff;
-  border: 1px solid #ebeef5;
+/* ===== 顶部导航 ===== */
+.tdv-nav {
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 12px;
   padding: 12px 20px;
   margin-bottom: 20px;
-  .nav-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .main-title {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 800;
-    color: #303133;
-    word-break: break-word;
-    line-height: 1.4;
-  }
-}
-
-.main-layout {
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 20px;
-}
-
-.article-card, .comment-card, .user-card-stable {
-  background: #fff;
-  border: 1px solid #ebeef5;
-  border-radius: 12px;
-  padding: 24px;
-}
-
-.author-strip {
   display: flex;
   align-items: center;
-  gap: 12px;
-  .a-name { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 4px; }
-  .a-time { font-size: 12px; color: #909399; margin-top: 2px; }
-}
-
-.post-body {
-  font-size: 16px;
-  line-height: 1.8;
-  color: #303133;
-  .html-content { word-break: break-word; }
-}
-
-.detail-tags-area {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-right: 12px;
-}
-
-.main-det-tag {
-  font-size: 13px;
-  font-weight: 900;
-  color: #f43f5e;
-  background: #fff1f2;
-  padding: 4px 14px;
-  border-radius: 100px;
-  border: 1px solid #ffe4e6;
-  white-space: nowrap;
-}
-
-.sub-det-tag {
-  font-size: 12px;
-  font-weight: 700;
-  color: #64748b;
-  background: #f8fafc;
-  padding: 3px 10px;
-  border-radius: 8px;
-  opacity: 0.8;
-  white-space: nowrap;
-}
-
-.image-gallery {
-  display: flex;
-  flex-wrap: wrap;
   gap: 10px;
-  margin-top: 20px;
-  .post-img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #f2f2f2; }
+  flex-wrap: wrap;
 }
 
-.footer-actions {
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 1px solid #f2f2f2;
+.back-btn {
+  display: inline-flex; align-items: center;
+  background: none; border: none; color: #606266;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  padding: 4px 10px; border-radius: 6px; transition: all 0.15s; white-space: nowrap;
+  &:hover { background: var(--el-fill-color-light); color: var(--el-color-primary); }
+}
+.nav-sep { width: 1px; height: 16px; background: var(--el-border-color); flex-shrink: 0; }
+.tags-row { display: flex; align-items: center; gap: 6px; }
+.tag-main {
+  font-size: 12px; font-weight: 800; color: #f43f5e;
+  background: #fff1f2; padding: 3px 12px; border-radius: 100px;
+  border: 1px solid #ffe4e6; white-space: nowrap;
+  &.gray { color: #64748b; background: #f1f5f9; border-color: #e2e8f0; }
+}
+.tag-sub { font-size: 11px; font-weight: 600; color: #64748b; background: #f8fafc; padding: 2px 8px; border-radius: 6px; }
+.nav-title {
+  margin: 0; font-size: 17px; font-weight: 800;
+  color: var(--el-text-color-primary); line-height: 1.4; word-break: break-word;
 }
 
-.btn-group { display: flex; gap: 10px; }
+/* ===== 主布局 ===== */
+.tdv-layout {
+  display: grid; grid-template-columns: 1fr 270px;
+  gap: 20px; align-items: flex-start;
+}
 
-.action-btn {
-  background: #f5f7fa;
-  border: 1px solid #e4e7ed;
-  border-radius: 20px;
-  padding: 8px 18px;
+/* ===== 文章卡片 ===== */
+.article-card {
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px; padding: 24px;
+}
+.author-bar {
+  display: flex; align-items: center; gap: 12px;
+  .ab-meta { flex: 1; }
+  .ab-name { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 4px; color: var(--el-text-color-primary); }
+  .ab-time { font-size: 12px; color: var(--el-text-color-placeholder); margin-top: 2px; }
+  .ab-ops { display: flex; gap: 6px; }
+}
+.post-body {
+  font-size: 16px; line-height: 1.8; color: var(--el-text-color-primary);
+  .html-content { word-break: break-word; }
+  .md-preview-area { 
+    background: transparent !important; border: none !important; padding: 0 !important;
+    /* 创建独立的层叠上下文，防止内部元素（如代码块 toolbar）的 z-index 
+       突破到弹窗遮罩层之上，导致 UI 穿透 bug */
+    isolation: isolate;
+    /* Limit markdown image height */
+    :deep(.md-editor-preview img) {
+      max-height: 480px;
+      width: auto;
+      max-width: 100%;
+      border-radius: 8px;
+    }
+    /* 重置 md-editor-v3 代码块 toolbar 的层级，防止其 sticky z-index 穿透弹窗 */
+    :deep(.md-editor-code-head) {
+      z-index: 1 !important;
+      position: sticky;
+    }
+    :deep(.md-editor-copy-button) {
+      z-index: 1 !important;
+    }
+  }
+}
+.img-gallery {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px;
+  .post-img { max-width: 320px; height: 200px; border-radius: 8px; border: 1px solid var(--el-border-color-lighter); }
+}
+
+/* ===== 互动栏 优化版 ===== */
+.interact-bar {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.interact-left { display: flex; align-items: center; gap: 8px; }
+.interact-right {
+  display: flex; align-items: center; gap: 6px;
+  .comment-stat { font-size: 13px; color: var(--el-text-color-placeholder); }
+}
+
+.ib-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-width: 96px;
+  justify-content: center;
+  padding: 8px 16px; border-radius: 20px;
+  font-size: 13px; font-weight: 600;
+  border: 1.5px solid var(--el-border-color);
+  background: var(--el-bg-color); color: var(--el-text-color-regular);
+  cursor: pointer; transition: all 0.2s;
+  user-select: none;
+
+  &:hover { border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-9); color: var(--el-color-primary); }
+
+  &.like-btn.active {
+    background: #eff6ff; color: #2563eb; border-color: #93c5fd;
+    font-weight: 700;
+  }
+  &.collect-btn.active {
+    background: #fffbeb; color: #d97706; border-color: #fde68a;
+    font-weight: 700;
+  }
+  &.share-btn:hover { border-color: #a3e635; background: #f7fee7; color: #4d7c0f; }
+}
+
+.ib-count {
   font-size: 13px;
-  font-weight: 600;
-  color: #606266;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
-  
-  &:hover { background: #ecf5ff; color: #409eff; border-color: #c6e2ff; }
-  &.active { background: #409eff; color: #fff; border-color: #409eff; }
+  font-weight: 800;
 }
 
-.comment-card { margin-top: 20px; }
-
-.comment-editor-wrap {
-  margin-bottom: 24px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid #f2f2f2;
+/* ===== B站风格评论区 ===== */
+.comment-section {
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px; padding: 24px; margin-top: 20px;
+}
+.cs-header {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 22px;
+  .cs-title { font-size: 18px; font-weight: 800; color: var(--el-text-color-primary); }
+  .cs-count { font-size: 14px; color: var(--el-text-color-placeholder); }
 }
 
-.c-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #f2f2f2;
-  margin-bottom: 20px;
-  .h-label { font-weight: 800; font-size: 16px; }
+/* 主输入框 */
+.cs-input-wrap { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 28px; }
+.cs-input-box {
+  flex: 1; border: 1.5px solid var(--el-border-color);
+  border-radius: 10px; overflow: hidden; transition: border-color 0.2s;
+  &.focused, &:focus-within { border-color: var(--el-color-primary); }
+}
+.cs-textarea {
+  width: 100%; min-height: 42px; max-height: 120px;
+  padding: 10px 12px; font-size: 14px; color: var(--el-text-color-primary);
+  background: transparent; border: none; outline: none; resize: none;
+  line-height: 1.6; font-family: inherit; box-sizing: border-box;
+  &::placeholder { color: var(--el-text-color-placeholder); }
+}
+.cs-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 10px; border-top: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-extra-light);
+  .cs-count-text { font-size: 12px; color: var(--el-text-color-placeholder); }
+}
+.cs-publish-btn {
+  padding: 5px 18px; background: #00aeec; color: #fff;
+  border: none; border-radius: 6px; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: background 0.2s;
+  &:hover:not(:disabled) { background: #0093c7; }
+  &:disabled { background: #b9dff5; cursor: not-allowed; }
 }
 
-.c-item {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #fafafa;
+/* 评论列表 */
+.cs-list { display: flex; flex-direction: column; }
+.cs-item {
+  display: flex; gap: 13px; padding: 18px 0;
+  border-bottom: 1px solid var(--el-border-color-extra-light);
   &:last-child { border-bottom: none; }
 }
-
-.c-content { flex: 1; }
-
-.c-user-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-  .c-un { font-weight: 700; font-size: 14px; color: #303133; }
-  .c-tm { font-size: 12px; color: #909399; }
+.cs-avatar { flex-shrink: 0; }
+.cs-body { flex: 1; min-width: 0; }
+.cs-row1 {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  .cs-username { font-size: 14px; font-weight: 700; color: var(--el-text-color-primary); }
+  .cs-time { font-size: 12px; color: var(--el-text-color-placeholder); }
+}
+.cs-quote {
+  display: flex; align-items: flex-start; gap: 4px;
+  background: var(--el-fill-color-light); border-left: 3px solid var(--el-border-color);
+  padding: 5px 10px; border-radius: 0 6px 6px 0;
+  margin-bottom: 8px; font-size: 12px; color: var(--el-text-color-secondary); line-height: 1.5;
+}
+.cs-text {
+  font-size: 14px; line-height: 1.7; color: var(--el-text-color-primary);
+  white-space: pre-wrap; word-break: break-word; margin: 0;
+}
+.cs-actions {
+  display: flex; align-items: center; gap: 14px; margin-top: 9px;
+}
+.cs-act-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; font-size: 12px;
+  color: var(--el-text-color-placeholder); cursor: pointer;
+  padding: 2px 0; transition: color 0.15s;
+  &:hover { color: var(--el-color-primary); }
+  &.danger:hover { color: var(--el-color-danger); }
 }
 
-.c-quote {
-  background: #f8f9fa;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #909399;
-  margin-bottom: 8px;
-  border-left: 3px solid #dcdfe6;
+/* 内联回复框 */
+.cs-reply-box {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 12px; padding: 10px 12px;
+  background: var(--el-fill-color-lighter); border-radius: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+}
+.cs-reply-input {
+  flex: 1; height: 34px; padding: 0 12px;
+  border: 1px solid var(--el-border-color); border-radius: 17px;
+  font-size: 13px; outline: none; background: var(--el-bg-color);
+  color: var(--el-text-color-primary); transition: border-color 0.2s;
+  &:focus { border-color: var(--el-color-primary); }
+  &::placeholder { color: var(--el-text-color-placeholder); }
+}
+.cs-reply-send {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 14px; background: #00aeec; color: #fff;
+  border: none; border-radius: 14px; font-size: 12px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; transition: background 0.2s;
+  flex-shrink: 0;
+  &:hover { background: #0093c7; }
+}
+.cs-pagination { margin-top: 20px; display: flex; justify-content: center; }
+
+/* ===== 右侧作者卡片 ===== */
+.author-card {
+  background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px; padding: 24px; text-align: center;
+  position: sticky; top: 80px;
+  .ac-name { font-weight: 800; font-size: 16px; margin-top: 12px; color: var(--el-text-color-primary); }
+  .ac-desc { font-size: 12px; color: var(--el-text-color-secondary); margin-top: 6px; line-height: 1.5; }
+  .ac-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--el-text-color-regular); text-align: left; }
 }
 
-.c-text { font-size: 14px; line-height: 1.6; color: #606266; }
-
-.c-actions { margin-top: 8px; }
-
-.pagination { margin-top: 20px; display: flex; justify-content: center; }
-
-.user-card-stable {
-  text-align: center;
-  .u-info { margin-top: 15px; }
-  .u-name { font-weight: 800; font-size: 16px; }
-  .u-desc { font-size: 12px; color: #909399; margin-top: 6px; line-height: 1.4; }
-  .u-details { text-align: left; font-size: 13px; color: #606266; .u-row { display: flex; align-items: center; gap: 8px; } }
-}
-
-@media (max-width: 800px) {
-  .main-layout { grid-template-columns: 1fr; }
-  .sidebar-section { display: none; }
+@media (max-width: 860px) {
+  .tdv-layout { grid-template-columns: 1fr; }
+  .tdv-sidebar { display: none; }
 }
 </style>

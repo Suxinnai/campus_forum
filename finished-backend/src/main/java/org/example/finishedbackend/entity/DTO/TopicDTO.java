@@ -20,4 +20,6 @@ public class TopicDTO {
     Date time;
     Integer uid;
     Integer top;
+    String status;
+    Integer featured;
 }

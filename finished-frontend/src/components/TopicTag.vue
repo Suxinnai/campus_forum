@@ -9,11 +9,11 @@ defineProps({
 </script>
 
 <template>
-  <div class="topic-type" :style="{
-    '--tag-color': store.findTypeById(type)?.color || '#909399'
+  <div v-if="store.findTypeById(type)" class="topic-type" :style="{
+    '--tag-color': store.findTypeById(type).color
   }">
     <span class="tag-dot"></span>
-    {{store.findTypeById(type)?.name || '未知'}}
+    {{store.findTypeById(type).name}}
   </div>
 </template>
 
