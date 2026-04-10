@@ -1,6 +1,6 @@
 # 🏫 Campus Forum | 校园论坛系统
 
-![Banner](docs/images/banner.png)
+![Banner](docs/images/activity_detail.png)
 
 一个基于 Spring Boot + Vue 3 开发的高颜值、功能完备的校园社区交流平台。旨在为在校学生提供一个安全、高效、美观的交流环境，支持话题讨论、活动报名、资源分享及全方位的管理后台。
 
