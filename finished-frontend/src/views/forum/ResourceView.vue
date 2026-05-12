@@ -7,8 +7,9 @@ import axios from 'axios'
 import {ElMessage} from 'element-plus'
 import {
   Upload, Download, FileText, BookOpen, StickyNote,
-  FolderOpen, Search, Clock, User, HardDrive, TrendingUp, Star
+  FolderOpen, Search, Clock, User, HardDrive, TrendingUp, Star, Trash2
 } from 'lucide-vue-next'
+import { ElMessageBox } from 'element-plus'
 
 const store = useAppStore()
 
@@ -157,6 +158,19 @@ function downloadResource(id, fileName) {
   }).catch(() => {
     ElMessage.error('下载失败，请重试')
   })
+}
+
+function deleteResource(item) {
+  ElMessageBox.confirm(`确定要删除资源「${item.title}」吗？此操作不可恢复。`, '删除确认', {
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消',
+    type: 'error'
+  }).then(() => {
+    post(`/api/resource/delete?id=${item.id}`, null, () => {
+      ElMessage.success('资源已删除')
+      loadResources()
+    })
+  }).catch(() => {})
 }
 
 function formatFileSize(bytes) {
@@ -329,6 +343,10 @@ loadResources = function() {
             </button>
             <button class="download-btn" @click="downloadResource(item.id, item.fileName)" title="下载资源">
               <Download :size="15" />
+            </button>
+            <button v-if="store.user.role === 'admin' || item.uploaderName === store.user.username"
+                    class="delete-btn" @click="deleteResource(item)" title="删除资源">
+              <Trash2 :size="15" />
             </button>
           </div>
         </div>
@@ -714,6 +732,27 @@ loadResources = function() {
     background: var(--ds-primary);
     color: #fff;
     box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+    transform: scale(1.1);
+  }
+}
+
+.delete-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #fef2f2;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--ds-transition);
+
+  &:hover {
+    background: #ef4444;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
     transform: scale(1.1);
   }
 }
