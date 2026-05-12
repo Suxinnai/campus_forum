@@ -96,12 +96,18 @@ const router = createRouter({
           path: "feedback",
           name: "home-feedback",
           component: () => import("@/views/forum/FeedbackView.vue")
-        }, {
-          path: "admin",
-          name: "home-admin",
+        }
+      ]
+    }, {
+      path: "/admin",
+      name: "admin",
+      component: () => import("@/views/admin/AdminLayout.vue"),
+      children: [
+        {
+          path: "",
+          name: "admin-dashboard",
           component: () => import("@/views/admin/AdminView.vue")
         }
-
       ]
     }
 
@@ -112,7 +118,7 @@ router.beforeEach((to, from, next) => {
   const loginStatus = getToken()
   if (to.name && to.name.startsWith("auth-") && loginStatus) {
     next("/home")
-  } else if (to.fullPath.startsWith("/home") && !loginStatus) {
+  } else if ((to.fullPath.startsWith("/home") || to.fullPath.startsWith("/admin")) && !loginStatus) {
     next("/login")
   } else {
     next();

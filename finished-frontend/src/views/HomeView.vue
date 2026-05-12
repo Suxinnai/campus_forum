@@ -2,7 +2,7 @@
 import { get, del, logout } from "@/net/api.js";
 import { useAppStore } from "@/stores/app-store.js";
 import { computed, ref, watch } from "vue";
-import { Bell, Check, Tent, BookOpen, BarChart2, Settings, LogOut, Sun, Moon, Home, ShieldCheck, GraduationCap, Users, Bookmark, PlusSquare, Plus, Link, MessageSquare, User, Search } from "lucide-vue-next";
+import { Bell, Check, Tent, BookOpen, BarChart2, Settings, LogOut, Sun, Moon, Home, GraduationCap, Users, Bookmark, PlusSquare, Plus, Link, MessageSquare, User, Search } from "lucide-vue-next";
 import router from "@/router/index.js";
 import axios from "axios";
 import LightCard from "@/components/LightCard.vue";
@@ -72,15 +72,7 @@ const navGroups = [
   }
 ];
 
-const adminNav = {
-  title: "管理后台",
-  items: [
-    { label: "全站概览", path: "/home/admin", icon: ShieldCheck },
-  ]
-};
-
 const currentPath = computed(() => router.currentRoute.value.path);
-const isAdmin = computed(() => ['admin', 'content_admin', 'moderator'].includes(store.user.role));
 
 const searchKeyword = ref('')
 const searchResults = ref([])
@@ -232,10 +224,6 @@ function closeSearchPanel() {
                     <div class="udc-icon-wrap"><Bookmark :size="16" /></div>
                     <span>我的收藏</span>
                   </div>
-                  <div v-if="isAdmin" class="udc-item" @click="router.push('/home/admin')">
-                    <div class="udc-icon-wrap"><ShieldCheck :size="16" /></div>
-                    <span>管理后台</span>
-                  </div>
                 </div>
                 <div class="udc-divider"></div>
                 <div class="udc-menu">
@@ -280,10 +268,6 @@ function closeSearchPanel() {
             <span>{{ item.label }}</span>
           </a>
         </div>
-        <a v-if="isAdmin" class="nav-item nav-admin" @click="router.push('/home/admin')">
-          <ShieldCheck :size="17" class="nav-icon" />
-          <span>管理后台</span>
-        </a>
       </nav>
     </aside>
 
@@ -614,11 +598,6 @@ function closeSearchPanel() {
     .nav-icon { color: #4f46e5; }
   }
 
-  &.nav-admin {
-    color: var(--el-color-warning);
-    .nav-icon { color: var(--el-color-warning); }
-    &:hover { background: var(--el-color-warning-light-9); color: var(--el-color-warning-dark-2); }
-  }
 }
 
 .sidebar-footer {

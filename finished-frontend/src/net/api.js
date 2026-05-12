@@ -114,7 +114,12 @@ const login = (username, password, remember) => {
     }, (data) => {
         storeToken(data.token, remember, data.expireTime);
         ElMessage.success({ message: `欢迎用户${data.username}登录成功`, plain: true })
-        router.push("/home")
+        const adminRoles = ['admin', 'content_admin', 'moderator']
+        if (adminRoles.includes(data.role)) {
+            router.push("/admin")
+        } else {
+            router.push("/home")
+        }
     })
 }
 
