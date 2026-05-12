@@ -4,9 +4,9 @@ import { useAppStore } from "@/stores/app-store.js";
 
 const store = useAppStore();
 
-// 只在 types 未加载时才请求，防止重复 push
-if (!store.forum.types || store.forum.types.length === 0) {
-  // Prevent parallel requests giving duplicate tabs
+// 使用 _typesLoaded 标志严格防止重复加载
+if (!store.forum._typesLoaded) {
+  store.forum._typesLoaded = true;
   store.forum.types = [{ name: "全部", id: 0, color: 'linear-gradient(45deg, white, red, orange, gold, green, blue)' }];
   get("/api/forum/types", data => {
     store.forum.types = [

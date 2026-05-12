@@ -61,26 +61,35 @@ const submitTopic = () => {
     ElMessage.warning({message:"请填写标题!", plain:true})
     return
   }
+  if (!editor.tags.length) {
+    ElMessage.warning({message:"请至少选择一个话题标签!", plain:true})
+    return
+  }
   
-  const typeId = editor.type?.id ?? 0;
+  // 用第一个Tag自动映射type（向后兼容，满足数据库外键约束）
+  const firstTag = editor.tags[0]
+  const matchedType = store.forum.types.find(t => t.id > 0 && t.name === firstTag)
+  // 如果Tag名和type名不匹配，fallback到第一个有效type
+  const fallbackType = store.forum.types.find(t => t.id > 0)
+  const typeId = matchedType?.id ?? fallbackType?.id ?? 1;
 
   const dummyOps = [{ insert: extractPlain(editor.text) }];
   images.value.forEach(img => {
       dummyOps.push({ insert: { image: img.url } });
   });
 
-  const payloadStr = JSON.stringify({
+  const payloadObj = {
     ops: dummyOps,
     md: editor.text,
     images: images.value.map(i => i.url),
     tags: editor.tags
-  });
+  };
 
   if (props.tid === "-1") {
     post("/api/forum/create-topic", {
       type: typeId,
       title: editor.title,
-      content: payloadStr
+      content: payloadObj
     }, () => {
       ElMessage.success({message:"文章发表成功", plain:true})
       emit('success')
@@ -90,7 +99,7 @@ const submitTopic = () => {
       id: parseInt(props.tid),
       type: typeId,
       title: editor.title,
-      content: payloadStr
+      content: payloadObj
     }, () => {
       ElMessage.success({message:"文章更新成功", plain:true})
       emit('success')
@@ -227,7 +236,7 @@ const onMdUploadImg = async (files, callback) => {
 
         <div class="editor-meta-footer">
           <div class="meta-item tag-picker-item">
-            <div class="section-label">添加话题 (最多 3 个)</div>
+            <div class="section-label">选择话题标签 (至少1个，最多3个)</div>
             <div class="tag-pool">
               <span 
                 v-for="tag in presetTags" 
@@ -300,7 +309,7 @@ const onMdUploadImg = async (files, callback) => {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #7C3AED, #4F46E5);
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
   color: #fff;
   display: flex;
   align-items: center;
@@ -384,7 +393,8 @@ const onMdUploadImg = async (files, callback) => {
 .editor-meta-footer {
   padding: 12px 24px 20px;
   display: flex;
-  gap: 32px;
+  flex-direction: column;
+  gap: 16px;
   border-top: 1px solid rgba(0,0,0,0.03);
 }
 
@@ -418,7 +428,7 @@ const onMdUploadImg = async (files, callback) => {
     background: var(--el-color-primary-light-9);
     color: var(--el-color-primary);
     border-color: var(--el-color-primary-light-7);
-    box-shadow: 0 4px 10px rgba(124, 58, 237, 0.1);
+    box-shadow: 0 4px 10px rgba(14, 165, 233, 0.1);
   }
 }
 

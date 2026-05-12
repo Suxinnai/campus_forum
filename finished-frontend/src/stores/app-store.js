@@ -12,7 +12,8 @@ export const useAppStore = defineStore('app', () => {
     registerTime: null,
   })
   const forum = reactive({
-    types: []
+    types: [],
+    _typesLoaded: false
   })
   function findTypeById(id) {
     for (let type of forum.types) {
@@ -20,6 +21,9 @@ export const useAppStore = defineStore('app', () => {
         return type
       }
     }
+  }
+  function findTypeByName(name) {
+    return forum.types.find(t => t.name === name)
   }
   const geo = reactive({
     loading: true,
@@ -56,5 +60,5 @@ export const useAppStore = defineStore('app', () => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
   };
 
-  return { user, forum, geo, findTypeById, getAvatar, loadGeo}
+  return { user, forum, geo, findTypeById, findTypeByName, getAvatar, loadGeo}
 })

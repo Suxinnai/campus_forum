@@ -3,17 +3,36 @@ import {useAppStore} from "@/stores/app-store.js";
 
 const store = useAppStore();
 
-defineProps({
-  type: Number
+const props = defineProps({
+  type: Number,
+  tags: { type: Array, default: () => [] }
 })
+
+// 优先使用 tags，回退到 type
+const tagLabel = computed(() => {
+  if (props.tags && props.tags.length > 0) return props.tags[0]
+  const found = store.findTypeById(props.type)
+  return found ? found.name : null
+})
+
+const tagColor = computed(() => {
+  // 尝试通过标签名匹配类型颜色
+  if (tagLabel.value) {
+    const match = store.forum.types?.find(t => t.name === tagLabel.value)
+    if (match) return match.color
+  }
+  // 回退到通过 type id 查找
+  const found = store.findTypeById(props.type)
+  return found ? found.color : '#64748b'
+})
+
+import { computed } from 'vue'
 </script>
 
 <template>
-  <div v-if="store.findTypeById(type)" class="topic-type" :style="{
-    '--tag-color': store.findTypeById(type).color
-  }">
+  <div v-if="tagLabel" class="topic-type" :style="{ '--tag-color': tagColor }">
     <span class="tag-dot"></span>
-    {{store.findTypeById(type).name}}
+    {{ tagLabel }}
   </div>
 </template>
 
