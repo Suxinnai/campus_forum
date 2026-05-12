@@ -120,6 +120,31 @@ public class AdminController {
             dailyPosts.add(item);
         }
         map.put("dailyPosts", dailyPosts);
+        // 帖子标签分布（饼图数据）— 基于content中的tags字段统计
+        List<TopicDTO> allTopics = topicService.list();
+        Map<String, Integer> tagCounter = new LinkedHashMap<>();
+        for (TopicDTO topic : allTopics) {
+            try {
+                com.alibaba.fastjson2.JSONObject content = com.alibaba.fastjson2.JSONObject.parseObject(topic.getContent());
+                List<String> tags = content.getList("tags", String.class);
+                if (tags != null && !tags.isEmpty()) {
+                    // 只统计第一个tag（主分类）
+                    tagCounter.merge(tags.get(0), 1, Integer::sum);
+                } else {
+                    tagCounter.merge("未分类", 1, Integer::sum);
+                }
+            } catch (Exception e) {
+                tagCounter.merge("未分类", 1, Integer::sum);
+            }
+        }
+        List<Map<String, Object>> categoryDistribution = new ArrayList<>();
+        tagCounter.forEach((name, count) -> {
+            Map<String, Object> item = new HashMap<>();
+            item.put("name", name);
+            item.put("value", count);
+            categoryDistribution.add(item);
+        });
+        map.put("categoryDistribution", categoryDistribution);
         return RestBean.success(map, null);
     }
 
