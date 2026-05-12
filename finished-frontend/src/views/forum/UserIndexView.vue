@@ -42,7 +42,8 @@ function loadCenter() {
 onMounted(() => {
   loadCenter();
   store.loadGeo();
-  if (!store.forum.types?.length) {
+  if (!store.forum._typesLoaded) {
+    store.forum._typesLoaded = true;
     get("/api/forum/types", data => {
       store.forum.types = [
         { name: "全部", id: 0, color: "linear-gradient(45deg, white, red, orange, gold, green, blue)" },
@@ -180,7 +181,7 @@ const personalTags = computed(() => {
             @click="router.push('/home/topic/' + item.id)"
           >
             <div class="card-top">
-              <TopicTag :type="item.type" />
+              <TopicTag :type="item.type" :tags="item.tags" />
               <span class="card-time">{{ new Date(item.time).toLocaleDateString() }}</span>
             </div>
             <h3 class="card-title">{{ item.title }}</h3>
@@ -202,7 +203,7 @@ const personalTags = computed(() => {
             @click="router.push('/home/topic/' + item.id)"
           >
             <div class="card-top">
-              <TopicTag :type="item.type" />
+              <TopicTag :type="item.type" :tags="item.tags" />
               <span class="card-time">{{ new Date(item.time).toLocaleDateString() }}</span>
             </div>
             <h3 class="card-title">{{ item.title }}</h3>

@@ -2,7 +2,8 @@
 import {
   SquarePen, ThumbsUp, MessageSquare, Share2,
   TrendingUp, Flame, CalendarDays, Megaphone,
-  Bookmark, Trash2, Quote, MoreHorizontal, RefreshCcw
+  Bookmark, Trash2, Quote, MoreHorizontal, RefreshCcw,
+  ChevronDown, ChevronUp, Pin
 } from "lucide-vue-next";
 import { computed, reactive, ref, watch, onMounted, onActivated } from "vue";
 import { get, post, del } from "@/net/api.js";
@@ -12,6 +13,7 @@ import TopicTag from "@/components/TopicTag.vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 
 const store = useAppStore();
+const showAllHot = ref(false);
 
 function deletePost(id) {
   ElMessageBox.confirm('确定要删除这条帖子吗？此操作不可恢复。', '删除确认', {
@@ -234,6 +236,7 @@ function formatActivityTime(d) {
               </div>
 
               <div class="post-body">
+                <div v-if="item.top === 1" class="pinned-badge"><Pin :size="12" /> 置顶</div>
                 <div class="post-content" :style="{ borderLeft: `3px solid ${store.findTypeById(item.type)?.color || 'transparent'}`, paddingLeft: '12px' }">
                     <div class="post-meta-top">
                       <!-- 动态话题标签 (主+副) -->
@@ -297,7 +300,7 @@ function formatActivityTime(d) {
             </div>
             <ul class="hot-list">
               <li
-                v-for="(item, index) in topics.top.slice(0, 5)"
+                v-for="(item, index) in topics.top.slice(0, showAllHot ? 5 : 3)"
                 :key="item.id"
                 class="hot-item"
                 @click="router.push(`/home/topic/${item.id}`)"
@@ -307,6 +310,15 @@ function formatActivityTime(d) {
                 <Flame :size="13" class="hot-flame" v-if="index < 3" />
               </li>
             </ul>
+            <div
+              v-if="topics.top.length > 3"
+              class="hot-expand-btn"
+              @click="showAllHot = !showAllHot"
+            >
+              <span>{{ showAllHot ? '收起' : '展开全部' }}</span>
+              <ChevronUp v-if="showAllHot" :size="14" />
+              <ChevronDown v-else :size="14" />
+            </div>
           </div>
 
           <!-- 校园日历 -->
@@ -602,15 +614,18 @@ function formatActivityTime(d) {
   font-weight: 500;
 }
 
-/* ===== 帖子列表 (瀑布流布局) ===== */
+/* ===== 帖子列表 (双列网格布局) ===== */
 .post-list {
-  columns: 2;
+  column-count: 2;
   column-gap: 20px;
 }
 
 .post-card {
   break-inside: avoid;
   margin-bottom: 20px;
+}
+
+.post-card {
   background: var(--el-bg-color);
   border-radius: 16px;
   overflow: hidden;
@@ -640,6 +655,19 @@ function formatActivityTime(d) {
 
 .post-body {
   padding: 12px 16px 8px;
+}
+
+.pinned-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ef4444;
+  background: #fef2f2;
+  border-radius: 6px;
 }
 
 .post-content {
@@ -820,6 +848,25 @@ function formatActivityTime(d) {
 .hot-flame {
   color: #f97316;
   flex-shrink: 0;
+}
+
+.hot-expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s;
+
+  &:hover {
+    background: var(--el-color-primary-light-9);
+  }
 }
 
 /* ===== 日历 ===== */
