@@ -73,8 +73,29 @@ public class SecurityConfiguration {
                     conf.sessionCreationPolicy(SessionCreationPolicy.STATELESS);
                 })
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(conf -> conf.configurationSource(corsConfigurationSource()))
+                .addFilterBefore(corsFilter(), org.springframework.security.web.session.DisableEncodeUrlFilter.class)
                 .addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
+    }
+
+    @Bean
+    public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+        org.springframework.web.cors.CorsConfiguration config = new org.springframework.web.cors.CorsConfiguration();
+        config.addAllowedOriginPattern("*");
+        config.addAllowedMethod("*");
+        config.addAllowedHeader("*");
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+        org.springframework.web.cors.UrlBasedCorsConfigurationSource source =
+                new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    @Bean
+    public org.springframework.web.filter.CorsFilter corsFilter() {
+        return new org.springframework.web.filter.CorsFilter(corsConfigurationSource());
     }
 
     void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
