@@ -24,4 +24,5 @@ public class TopicPreviewVO {
     int collect;
     int comments;
     List<String> tags;
+    Integer top;
 }

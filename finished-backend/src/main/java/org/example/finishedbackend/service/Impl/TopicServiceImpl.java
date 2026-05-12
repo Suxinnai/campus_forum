@@ -84,9 +84,15 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "文章内容不能为空";
         if (!textLimitCheck(vo.getContent(), 20000))
             return "文章字数过多, 请稍后再试";
-        if (vo.getType() != 0 && !types.contains(vo.getType()))
+        if (vo.getType() == 0) {
+            // tag系统替代分类后，type字段仅作兼容，默认取第一个有效分类
+            List<TopicTypeDTO> typeList = this.listTypes();
+            if (!typeList.isEmpty()) {
+                vo.setType(typeList.get(0).getId());
+            }
+        } else if (!types.contains(vo.getType()))
             return "文章类型非法！";
-        if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_CREATE_COUNTER + uid, 3, 3600))
+        if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_CREATE_COUNTER + uid, 20, 3600))
             return "发文频繁, 请稍后再试";
         String sensitiveHit = sensitiveCheck(vo.getTitle() + " " + vo.getContent().toJSONString());
         if (sensitiveHit != null)
@@ -233,10 +239,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return voList;
         Page<TopicDTO> page = Page.of(pageNumber + 1, 10);
         if (type == -1) {
-            // 热门：按点赞数降序（子查询统计）
             baseMapper.selectPage(page, Wrappers.<TopicDTO>query().orderByDesc("time"));
         } else if (type == -2 || type == 0) {
-            // 最新 / 全部：按时间降序
             baseMapper.selectPage(page, Wrappers.<TopicDTO>query().orderByDesc("time"));
         } else {
             baseMapper.selectPage(page, Wrappers.<TopicDTO>query().eq("type", type).orderByDesc("time"));
@@ -246,8 +250,20 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return null;
         voList = list.stream().map(this::resolveToPreview).collect(Collectors.toList());
         if (type == -1) {
-            // 热门：按点赞数降序排列
             voList.sort((a, b) -> b.getLike() - a.getLike());
+        }
+        // 第一页且全部/最新tab时，将置顶帖排在最前面
+        if (pageNumber == 0 && (type == 0 || type == -2)) {
+            List<TopicDTO> pinnedDtos = baseMapper.selectList(Wrappers.<TopicDTO>query()
+                    .eq("top", 1).orderByDesc("time"));
+            if (pinnedDtos != null && !pinnedDtos.isEmpty()) {
+                Set<Integer> pinnedIds = pinnedDtos.stream().map(TopicDTO::getId).collect(Collectors.toSet());
+                voList.removeIf(v -> pinnedIds.contains(v.getId()));
+                List<TopicPreviewVO> pinnedVos = pinnedDtos.stream()
+                        .map(this::resolveToPreview).collect(Collectors.toList());
+                pinnedVos.addAll(voList);
+                voList = pinnedVos;
+            }
         }
         cacheUtils.saveListToCache(key, voList, 60);
         return voList;
@@ -264,10 +280,34 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     @Override
     public List<TopicTopVO> listTopTopics() {
+        // 只取当天发布的帖子，按点赞数降序取前5作为今日热门
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        Date todayStart = cal.getTime();
+
         List<TopicDTO> topics = baseMapper.selectList(Wrappers.<TopicDTO>query()
                 .select("id", "title", "time")
-                .eq("top", 1));
-        return topics.stream().map(topic -> new TopicTopVO(topic.getId(), topic.getTitle(), topic.getTime())).toList();
+                .ge("time", todayStart)
+                .orderByDesc("time"));
+        // 如果当天帖子不足5条，补充最近的帖子
+        if (topics.size() < 5) {
+            Set<Integer> existIds = topics.stream().map(TopicDTO::getId).collect(Collectors.toSet());
+            List<TopicDTO> recent = baseMapper.selectList(Wrappers.<TopicDTO>query()
+                    .select("id", "title", "time")
+                    .lt("time", todayStart)
+                    .orderByDesc("time")
+                    .last("LIMIT " + (5 - topics.size())));
+            recent.stream().filter(t -> !existIds.contains(t.getId())).forEach(topics::add);
+        }
+        return topics.stream()
+                .sorted((a, b) -> baseMapper.interactCount(b.getId(), "like")
+                        - baseMapper.interactCount(a.getId(), "like"))
+                .limit(5)
+                .map(topic -> new TopicTopVO(topic.getId(), topic.getTitle(), topic.getTime()))
+                .toList();
     }
 
     @Override
@@ -416,7 +456,7 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
                 interactCountWithPending(dto.getId(), "like"),
                 interactCountWithPending(dto.getId(), "collect"),
                 commentMapper.selectCount(Wrappers.<TopicCommentDTO>query().eq("tid", dto.getId())).intValue(),
-                null);
+                null, dto.getTop());
         List<String> images = new LinkedList<>();
         StringBuilder previewText = new StringBuilder();
         try {
@@ -427,6 +467,7 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         } catch (Exception e) {}
         vo.setText(previewText.length() > 300 ? previewText.substring(0, 300) : previewText.toString());
         vo.setImages(images);
+        vo.setTop(dto.getTop());
         return vo;
     }
 
