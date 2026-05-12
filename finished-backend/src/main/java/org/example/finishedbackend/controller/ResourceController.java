@@ -89,4 +89,11 @@ public class ResourceController {
     public RestBean<List<ResourceVO>> myCollects(@RequestAttribute("id") int uid) {
         return RestBean.success(resourceService.listCollectedResources(uid), null);
     }
+
+    @PostMapping("/delete")
+    public RestBean<Void> delete(@RequestParam int id,
+            @RequestAttribute("id") int uid) {
+        boolean ok = resourceService.deleteResource(id, uid);
+        return ok ? RestBean.success(null) : RestBean.failure(403, "无权删除该资源");
+    }
 }

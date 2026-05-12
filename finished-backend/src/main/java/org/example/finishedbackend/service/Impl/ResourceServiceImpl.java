@@ -50,11 +50,7 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
 
             ResourceDTO dto = new ResourceDTO();
             dto.setTitle(title);
-            // 如果分类为空或"其他"，根据文件后缀自动判断
-            if (category == null || category.isBlank() || "其他".equals(category)) {
-                category = guessCategory(originalFilename);
-            }
-            dto.setCategory(category);
+            dto.setCategory(category != null && !category.isBlank() ? category : "其他");
             dto.setFileUrl(relativePath);
             dto.setFileName(originalFilename);
             dto.setFileSize(file.getSize());
@@ -98,17 +94,6 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
         return new ResourceListVO(list, pageQuery.getTotal());
     }
 
-    private String guessCategory(String fileName) {
-        if (fileName == null) return "其他";
-        String ext = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
-        return switch (ext) {
-            case "ppt", "pptx", "key" -> "课件";
-            case "pdf", "doc", "docx", "tex" -> "论文";
-            case "md", "txt", "odt", "rtf", "pages" -> "笔记";
-            default -> "其他";
-        };
-    }
-
     @Override
     public ResourceDTO downloadResource(int id, OutputStream stream) throws Exception {
         ResourceDTO dto = this.getById(id);
@@ -148,5 +133,22 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
                     account != null ? account.getAvatar() : null,
                     dto.getCreateTime());
         }).toList();
+    }
+
+    @Override
+    public boolean deleteResource(int rid, int uid) {
+        ResourceDTO dto = this.getById(rid);
+        if (dto == null) return false;
+        AccountDTO account = accountMapper.selectById(uid);
+        boolean isAdmin = account != null && "admin".equals(account.getRole());
+        if (dto.getUploaderId() != uid && !isAdmin) return false;
+        this.removeById(rid);
+        try {
+            Path path = Paths.get(storagePath + dto.getFileUrl());
+            Files.deleteIfExists(path);
+        } catch (Exception e) {
+            log.warn("删除资源文件失败：{}", e.getMessage());
+        }
+        return true;
     }
 }

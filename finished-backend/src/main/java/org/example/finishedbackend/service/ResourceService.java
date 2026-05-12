@@ -29,4 +29,5 @@ public interface ResourceService extends IService<ResourceDTO> {
     void collectResource(int rid, int uid, boolean state);
     boolean hasCollected(int rid, int uid);
     List<ResourceVO> listCollectedResources(int uid);
+    boolean deleteResource(int rid, int uid);
 }
