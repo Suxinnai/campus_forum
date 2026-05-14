@@ -118,7 +118,7 @@ const schedules = ref([])
 const showScheduleDialog = ref(false)
 const scheduleEditMode = ref(false)
 const scheduleForm = reactive({
-  id: null, title: '', description: '', eventDate: '', endDate: '', type: 'event'
+  id: null, title: '', description: '', eventDate: '', endDate: '', type: 'semester'
 })
 
 // 资源管理
@@ -375,19 +375,26 @@ function openEditNotice(n) {
 
 function submitNotice() {
   if (!noticeForm.title || !noticeForm.content) { ElMessage.warning('请填写标题和内容'); return }
-  if (editNoticeMode.value && editNoticeId.value) {
-    put('/api/admin/notice/update', { id: editNoticeId.value, ...noticeForm }, () => {
-      ElMessage.success('公告已更新')
-      showNoticeDialog.value = false
-      loadNotices()
-    })
-  } else {
-    post('/api/admin/notice/add', noticeForm, () => {
-      ElMessage.success('公告发布成功')
-      showNoticeDialog.value = false
-      loadNotices()
-    })
-  }
+  const confirmMsg = noticeForm.isTop === 1
+    ? '该公告将置顶展示在学生端公告栏，请确认是否发布？'
+    : '发布后学生端将立即可见，请确认内容无误。'
+  ElMessageBox.confirm(confirmMsg, '确认发布公告？', {
+    confirmButtonText: '确认发布', cancelButtonText: '取消', type: 'info'
+  }).then(() => {
+    if (editNoticeMode.value && editNoticeId.value) {
+      put('/api/admin/notice/update', { id: editNoticeId.value, ...noticeForm }, () => {
+        ElMessage.success('公告已更新')
+        showNoticeDialog.value = false
+        loadNotices()
+      })
+    } else {
+      post('/api/admin/notice/add', noticeForm, () => {
+        ElMessage.success('公告发布成功')
+        showNoticeDialog.value = false
+        loadNotices()
+      })
+    }
+  }).catch(() => {})
 }
 
 function toggleNoticeTop(n) {
@@ -466,7 +473,7 @@ function deleteActivity(id) {
 // ===== 校历日程管理（独立于活动）=====
 function openAddSchedule() {
   scheduleEditMode.value = false
-  Object.assign(scheduleForm, { id: null, title: '', description: '', eventDate: '', endDate: '', type: 'event' })
+  Object.assign(scheduleForm, { id: null, title: '', description: '', eventDate: '', endDate: '', type: 'semester' })
   showScheduleDialog.value = true
 }
 
@@ -642,10 +649,10 @@ onMounted(() => {
         </a>
       </nav>
       <div class="sidebar-footer">
-        <a class="nav-item back-link" @click="router.push('/home')">
+        <button type="button" class="nav-item back-link" @click="router.push('/home')">
           <ArrowLeft :size="16" class="nav-icon" />
           <span class="nav-label">返回前台</span>
-        </a>
+        </button>
       </div>
     </aside>
 
@@ -1118,103 +1125,162 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <!-- ============ 公告发布/编辑抽屉 ============ -->
-    <el-drawer v-model="showNoticeDialog" :title="editNoticeMode ? '编辑公告' : '发布校园公告'" size="480px" direction="rtl">
-      <el-form label-position="top">
-        <el-form-item label="公告标题">
-          <el-input v-model="noticeForm.title" maxlength="100" placeholder="请填写公告标题" />
-        </el-form-item>
-        <el-form-item label="发布机构">
-          <el-input v-model="noticeForm.publisher" maxlength="50" placeholder="如：教务处、校方、信息中心" />
-        </el-form-item>
-        <el-form-item label="公告内容">
-          <el-input type="textarea" v-model="noticeForm.content" :rows="6" maxlength="2000" show-word-limit />
-        </el-form-item>
-        <el-form-item label="是否顶置">
-          <el-switch v-model="noticeForm.isTop" :active-value="1" :inactive-value="0" active-text="顶置" inactive-text="普通" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showNoticeDialog = false">取消</el-button>
-        <el-button type="primary" @click="submitNotice">{{ editNoticeMode ? '保存修改' : '发布公告' }}</el-button>
+    <!-- ============ 公告发布/编辑弹窗 ============ -->
+    <el-dialog v-model="showNoticeDialog" width="880px" class="admin-modal" :show-close="true" :close-on-click-modal="false" destroy-on-close align-center>
+      <template #header>
+        <div class="modal-header">
+          <h2>{{ editNoticeMode ? '编辑公告' : '发布校园公告' }}</h2>
+          <p>请认真填写公告细节，确保信息准确。公告将展示在学生端首页及公告栏。</p>
+        </div>
       </template>
-    </el-drawer>
+      <div class="modal-body">
+        <el-form label-position="top" class="modal-form">
+          <el-form-item label="公告标题 *">
+            <el-input v-model="noticeForm.title" maxlength="100" placeholder="请输入公告标题，如：关于图书馆开放时间调整的通知" />
+          </el-form-item>
+          <el-form-item label="发布单位">
+            <el-select v-model="noticeForm.publisher" style="width:100%">
+              <el-option label="校方" value="校方" />
+              <el-option label="教务处" value="教务处" />
+              <el-option label="学生处" value="学生处" />
+              <el-option label="后勤处" value="后勤处" />
+              <el-option label="信息中心" value="信息中心" />
+              <el-option label="学生会" value="学生会" />
+              <el-option label="团委" value="团委" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="公告级别">
+            <div class="mode-options">
+              <button type="button" class="mode-card" :class="{ active: noticeForm.isTop === 0 }" @click="noticeForm.isTop = 0">
+                <Clock :size="15" />
+                <span><strong>普通发布</strong><small>按发布时间自然排序</small></span>
+              </button>
+              <button type="button" class="mode-card" :class="{ active: noticeForm.isTop === 1 }" @click="noticeForm.isTop = 1">
+                <Pin :size="15" />
+                <span><strong>首页置顶</strong><small>始终显示在列表最上方</small></span>
+              </button>
+            </div>
+          </el-form-item>
+          <el-form-item label="正文内容 *">
+            <div class="textarea-wrap">
+              <el-input type="textarea" v-model="noticeForm.content" maxlength="2000" placeholder="请输入公告正文，建议包含时间、地点、对象及注意事项" :rows="4" />
+              <div class="textarea-footer">
+                <span>建议分段书写，让公告更容易阅读</span>
+                <span class="word-count">{{ (noticeForm.content || '').length }}/2000</span>
+              </div>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <div class="footer-actions">
+          <button class="btn secondary" @click="showNoticeDialog = false">取消</button>
+          <button class="btn primary" :disabled="!noticeForm.title || !noticeForm.content" @click="submitNotice">{{ editNoticeMode ? '保存修改' : '立即发布' }}</button>
+        </div>
+      </template>
+    </el-dialog>
 
-    <!-- ============ 校历日程编辑抽屉 ============ -->
-    <el-drawer v-model="showScheduleDialog" :title="scheduleEditMode ? '编辑日程' : '新增校历日程'" size="480px" direction="rtl">
-      <el-form label-position="top">
-        <el-form-item label="日程标题">
-          <el-input v-model="scheduleForm.title" maxlength="100" placeholder="如：期末考试周 / 暑假开始" />
-        </el-form-item>
-        <el-form-item label="日程类型">
-          <el-select v-model="scheduleForm.type" style="width:100%">
-            <el-option label="学期事件" value="semester" />
-            <el-option label="考试" value="exam" />
-            <el-option label="假期" value="holiday" />
-            <el-option label="其他" value="event" />
-          </el-select>
-        </el-form-item>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <!-- ============ 校历日程编辑弹窗 ============ -->
+    <el-dialog v-model="showScheduleDialog" width="680px" class="admin-modal" :show-close="true" :close-on-click-modal="false" destroy-on-close align-center>
+      <template #header>
+        <div class="modal-header">
+          <h2>{{ scheduleEditMode ? '编辑日程' : '新增校历日程' }}</h2>
+          <p>校历日程将展示在学生端日历模块，请确保日期准确、标题清晰。</p>
+        </div>
+      </template>
+      <div class="modal-body">
+        <el-form label-position="top" class="modal-form">
+          <el-form-item label="日程标题">
+            <el-input v-model="scheduleForm.title" maxlength="100" placeholder="如：期末考试周 / 暑假开始" />
+          </el-form-item>
+          <el-form-item label="日程类型">
+            <el-select v-model="scheduleForm.type" style="width:100%">
+              <el-option label="学期事件" value="semester" />
+              <el-option label="考试" value="exam" />
+              <el-option label="假期" value="holiday" />
+              <el-option label="其他" value="event" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="类型预览">
+            <div class="type-preview" :style="{ '--preview-color': getScheduleType(scheduleForm.type).color, '--preview-bg': getScheduleType(scheduleForm.type).bg }">
+              <span></span>
+              {{ getScheduleType(scheduleForm.type).label }}
+            </div>
+          </el-form-item>
+          <div class="modal-grid two-cols">
           <el-form-item label="开始日期">
             <el-input type="date" v-model="scheduleForm.eventDate" />
           </el-form-item>
           <el-form-item label="结束日期（可选）">
             <el-input type="date" v-model="scheduleForm.endDate" />
           </el-form-item>
-        </div>
-        <el-form-item label="描述（可选）">
-          <el-input type="textarea" v-model="scheduleForm.description" :rows="4" maxlength="500" />
-        </el-form-item>
-      </el-form>
+          </div>
+          <el-form-item label="描述（可选）">
+            <el-input type="textarea" v-model="scheduleForm.description" :rows="4" maxlength="500" placeholder="补充日程说明，例如涉及院系、地点或注意事项。" />
+          </el-form-item>
+        </el-form>
+      </div>
       <template #footer>
-        <el-button @click="showScheduleDialog = false">取消</el-button>
-        <el-button type="primary" @click="submitSchedule">{{ scheduleEditMode ? '保存修改' : '添加日程' }}</el-button>
+        <div class="footer-actions">
+          <button class="btn secondary" @click="showScheduleDialog = false">取消</button>
+          <button class="btn primary" :disabled="!scheduleForm.title || !scheduleForm.eventDate" @click="submitSchedule">{{ scheduleEditMode ? '保存修改' : '添加日程' }}</button>
+        </div>
       </template>
-    </el-drawer>
+    </el-dialog>
 
-    <!-- ============ 活动编辑抽屉 ============ -->
-    <el-drawer v-model="showActivityDialog" :title="activityEditMode ? '编辑活动' : '新增校园活动'" size="520px" direction="rtl">
-      <el-form label-position="top">
-        <el-form-item label="活动标题">
-          <el-input v-model="activityForm.title" maxlength="100" />
-        </el-form-item>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <!-- ============ 活动编辑弹窗 ============ -->
+    <el-dialog v-model="showActivityDialog" width="720px" class="admin-modal" :show-close="true" :close-on-click-modal="false" destroy-on-close align-center>
+      <template #header>
+        <div class="modal-header">
+          <h2>{{ activityEditMode ? '编辑活动' : '新增校园活动' }}</h2>
+          <p>活动信息将展示在活动中心，请完善地点、时间、主办方和报名限制。</p>
+        </div>
+      </template>
+      <div class="modal-body">
+        <el-form label-position="top" class="modal-form">
+          <el-form-item label="活动标题">
+            <el-input v-model="activityForm.title" maxlength="100" placeholder="例如：AI 创新工作坊 / 校园摄影大赛" />
+          </el-form-item>
+          <div class="modal-grid two-cols">
           <el-form-item label="活动地点">
-            <el-input v-model="activityForm.location" maxlength="100" />
+            <el-input v-model="activityForm.location" maxlength="100" placeholder="如：图书馆报告厅" />
           </el-form-item>
           <el-form-item label="主办单位">
-            <el-input v-model="activityForm.organizer" maxlength="100" />
+            <el-input v-model="activityForm.organizer" maxlength="100" placeholder="如：学生会 / 计算机学院" />
           </el-form-item>
+          </div>
+          <div class="modal-grid two-cols">
           <el-form-item label="开始时间">
             <el-input type="datetime-local" v-model="activityForm.startTime" />
           </el-form-item>
           <el-form-item label="结束时间">
             <el-input type="datetime-local" v-model="activityForm.endTime" />
           </el-form-item>
-        </div>
-        <el-form-item label="最大报名人数（0=不限）">
-          <el-input-number v-model="activityForm.maxPeople" :min="0" :max="9999" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="活动详情">
-          <el-input type="textarea" v-model="activityForm.content" :rows="5" maxlength="1000" />
-        </el-form-item>
-      </el-form>
+          </div>
+          <el-form-item label="最大报名人数（0=不限）">
+            <el-input-number v-model="activityForm.maxPeople" :min="0" :max="9999" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="活动详情">
+            <el-input type="textarea" v-model="activityForm.content" :rows="5" maxlength="1000" placeholder="描述活动亮点、报名要求、流程安排等。" />
+          </el-form-item>
+        </el-form>
+      </div>
       <template #footer>
-        <el-button @click="showActivityDialog = false">取消</el-button>
-        <el-button type="primary" @click="submitActivity">{{ activityEditMode ? '保存修改' : '创建活动' }}</el-button>
+        <div class="footer-actions">
+          <button class="btn secondary" @click="showActivityDialog = false">取消</button>
+          <button class="btn primary" @click="submitActivity">{{ activityEditMode ? '保存修改' : '创建活动' }}</button>
+        </div>
       </template>
-    </el-drawer>
+    </el-dialog>
   </div>
 </template>
 
 <style lang="less" scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
 .admin-layout {
   display: flex;
   height: 100%;
   background: #f8fafc;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: "Microsoft YaHei UI", "PingFang SC", "HarmonyOS Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
 
   html.dark & { background: #0f111a; }
 }
@@ -1320,8 +1386,10 @@ onMounted(() => {
 }
 
 .back-link {
+  border: 1px solid transparent !important;
   color: var(--el-text-color-secondary) !important;
   &:hover { 
+    border-color: #22c55e !important;
     color: var(--el-text-color-primary) !important; 
     background: rgba(0,0,0,0.03);
     html.dark & { background: rgba(255,255,255,0.05); }
@@ -2073,6 +2141,278 @@ onMounted(() => {
 .word-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 20px; font-size: 14px; font-weight: 700; color: #dc2626; box-shadow: 0 2px 8px rgba(220,38,38,0.1); }
 .word-x { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #fecaca; border: none; color: #dc2626; cursor: pointer; transition: all 0.2s; &:hover { background: #dc2626; color: #fff; transform: scale(1.1); } }
 
+// ─── Admin Modals — Professional, Clean, Functional ─────
+.admin-modal {
+  :deep(.el-dialog) {
+    border-radius: 16px;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #e4e7ed;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+  }
+
+  :deep(.el-dialog__header) { padding: 0; margin: 0; }
+  :deep(.el-dialog__body) { padding: 0; }
+  :deep(.el-dialog__footer) {
+    padding: 20px 48px 26px;
+    background: #ffffff;
+    border-top: 1px solid #f0f2f5;
+  }
+
+  :deep(.el-dialog__headerbtn) {
+    top: 22px;
+    right: 22px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+    &:hover { background: #f5f7fa; }
+  }
+
+  :deep(.el-form-item) { margin-bottom: 22px; }
+
+  :deep(.el-form-item__label) {
+    padding-bottom: 6px;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+
+  :deep(.el-input__wrapper),
+  :deep(.el-textarea__inner),
+  :deep(.el-input-number .el-input__wrapper),
+  :deep(.el-select__wrapper) {
+    min-height: 40px;
+    border-radius: 10px;
+    border: 1px solid #e0e3e8;
+    background: #ffffff;
+    box-shadow: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  :deep(.el-input__wrapper:hover),
+  :deep(.el-textarea__inner:hover),
+  :deep(.el-select__wrapper:hover) { border-color: #c8ccd4; }
+
+  :deep(.el-input__wrapper.is-focus),
+  :deep(.el-textarea__inner:focus),
+  :deep(.el-select__wrapper.is-focused) {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  }
+
+  html.dark & {
+    :deep(.el-dialog) {
+      background: #1e1e24;
+      border-color: rgba(255,255,255,0.08);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+    :deep(.el-dialog__footer) {
+      background: #1e1e24;
+      border-top-color: rgba(255,255,255,0.06);
+    }
+    :deep(.el-dialog__headerbtn:hover) { background: rgba(255,255,255,0.08); }
+    :deep(.el-form-item__label) { color: #e2e8f0; }
+    :deep(.el-input__wrapper),
+    :deep(.el-textarea__inner),
+    :deep(.el-input-number .el-input__wrapper),
+    :deep(.el-select__wrapper) {
+      background: rgba(15, 17, 26, 0.7);
+      border-color: rgba(255,255,255,0.1);
+    }
+  }
+}
+
+.modal-header {
+  padding: 24px 68px 16px 48px;
+  border-bottom: 1px solid #f0f2f5;
+
+  h2 {
+    margin: 0 0 6px;
+    color: #1e293b;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
+  }
+
+  p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  html.dark & {
+    border-bottom-color: rgba(255,255,255,0.06);
+    h2 { color: #f1f5f9; }
+    p { color: #9ca3af; }
+  }
+}
+
+.modal-body {
+  padding: 26px 48px 4px;
+}
+
+.modal-grid {
+  display: grid;
+  gap: 18px;
+  &.two-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+// ─── Compressed level cards (72px target height) ─────
+.mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mode-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  min-height: 56px;
+  border-radius: 10px;
+  border: 1.5px solid #e4e7ed;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  svg { flex-shrink: 0; color: #9ca3af; }
+
+  strong { display: block; color: #374151; font-size: 13px; font-weight: 700; line-height: 1.3; }
+  small { display: block; color: #9ca3af; font-size: 12px; line-height: 1.35; font-weight: 500; margin-top: 2px; }
+
+  &:hover { border-color: #b0b7c3; }
+
+  &.active {
+    border-color: #3b82f6;
+    background: #f8faff;
+    svg { color: #3b82f6; }
+    strong { color: #1d4ed8; }
+  }
+
+  html.dark & {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.12);
+    strong { color: #e2e8f0; }
+    svg { color: #6b7280; }
+    small { color: #6b7280; }
+    &.active {
+      background: rgba(59,130,246,0.1);
+      border-color: #3b82f6;
+      svg { color: #60a5fa; }
+      strong { color: #60a5fa; }
+    }
+  }
+}
+
+// ─── Full-width textarea ─────
+.textarea-wrap {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #e0e3e8;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus-within { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+
+  :deep(.el-textarea) {
+    width: 100%;
+  }
+
+  :deep(.el-textarea__inner) {
+    width: 100%;
+    border: none;
+    border-radius: 10px 10px 0 0;
+    box-shadow: none;
+    resize: vertical;
+    min-height: 220px;
+  }
+}
+
+.textarea-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px 9px;
+  border-top: 1px solid #f0f2f5;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 500;
+
+  .word-count {
+    font-variant-numeric: tabular-nums;
+    color: #c4cad4;
+  }
+}
+
+.type-preview {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid #e4e7ed;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  color: var(--preview-color);
+  background: var(--preview-bg);
+  font-size: 13px;
+  font-weight: 700;
+  span { width: 8px; height: 8px; border-radius: 50%; background: var(--preview-color); }
+}
+
+.footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 20px;
+  border-radius: 10px;
+  border: none;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  &.secondary {
+    color: #374151;
+    background: #ffffff;
+    border: 1px solid transparent;
+    &:hover { background: #f9fafb; border-color: #22c55e; }
+  }
+
+  &.primary {
+    color: #ffffff;
+    background: #3b82f6;
+    &:hover:not(:disabled) { background: #2563eb; box-shadow: 0 4px 12px rgba(59,130,246,0.25); }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  html.dark &.secondary {
+    color: #e2e8f0;
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.12);
+    &:hover { background: rgba(255,255,255,0.1); }
+  }
+  html.dark &.primary {
+    &:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+  }
+}
+
 // ─── Responsive ──────────────────────────────────────────
 @media (max-width: 900px) {
   .charts-row { grid-template-columns: 1fr; }
@@ -2083,5 +2423,11 @@ onMounted(() => {
   .sidebar-title span { display: none; }
   .content-inner { padding: 24px 20px 40px; }
   .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .admin-modal :deep(.el-dialog) { width: calc(100vw - 28px) !important; }
+  .modal-header { padding: 20px 52px 14px 24px; }
+  .modal-body { padding: 22px 24px 4px; }
+  .mode-options { grid-template-columns: 1fr; }
+  .modal-grid.two-cols { grid-template-columns: 1fr; gap: 0; }
+  .admin-modal :deep(.el-dialog__footer) { padding: 16px 24px 22px; }
 }
 </style>

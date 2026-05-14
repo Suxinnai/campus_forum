@@ -2,11 +2,11 @@
 import { Link as LinkIcon, ExternalLink, GraduationCap, School, Map as MapIcon, Calendar, Github, Globe } from 'lucide-vue-next';
 
 const schoolLinks = [
-  { name: '学校官网', url: 'https://www.google.com', icon: School, desc: '在这里了解学校的最新动态。', color: '#3b82f6' },
-  { name: '教务管理系统', url: 'https://教务.example.edu.cn', icon: GraduationCap, desc: '选课、查分、评教等教务服务。', color: '#10b981' },
-  { name: '数字图书馆', url: 'https://lib.example.edu.cn', icon: LinkIcon, desc: '查阅图书、借阅历史及学术资源库。', color: '#f59e0b' },
-  { name: '校园电子地图', url: 'https://map.example.edu.cn', icon: MapIcon, desc: '全校教学楼、宿舍、场馆精确定位。', color: '#6366f1' },
-  { name: '教务处校历', url: 'https://jwc.example.edu.cn/cal', icon: Calendar, desc: '最新学年校历安排及放假通知。', color: '#ec4899' },
+  { name: '学校官网', url: 'https://www.cqytxy.edu.cn/', icon: School, desc: '在这里了解学校的最新动态。', color: '#3b82f6' },
+  { name: '智慧校园', url: 'https://ehall.cqytxy.edu.cn/', icon: GraduationCap, desc: '一站式校园服务入口。', color: '#10b981' },
+  { name: '教务系统', url: 'https://http-10-252-6-31-80.vpn.cqytxy.edu.cn/', icon: LinkIcon, desc: '选课、查分、评教等教务服务。', color: '#f59e0b' },
+  { name: '数字图书馆', url: 'https://lib.cqytxy.edu.cn/', icon: MapIcon, desc: '查阅图书、借阅历史及学术资源库。', color: '#6366f1' },
+  { name: '学校校历', url: 'https://www.cqytxy.edu.cn/ggfw1/xxxl.htm', icon: Calendar, desc: '最新学年校历安排及放假通知。', color: '#ec4899' },
 ];
 
 const developerLinks = [
