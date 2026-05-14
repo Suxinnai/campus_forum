@@ -16,6 +16,10 @@ const toggleDark = useToggle(isDark)
 get('/api/user/info', data => {
   store.user = data
   loading.value = false
+  const adminRoles = ['admin', 'content_admin', 'moderator']
+  if (!adminRoles.includes(data.role)) {
+    router.push('/home')
+  }
 })
 
 const getAvatar = computed(() => store.getAvatar(store.user.avatar, store.user.username))
@@ -42,7 +46,7 @@ function userLogout() {
         <div class="topbar-divider"></div>
         <div class="admin-badge">
           <Shield :size="12" />
-          <span>{{ store.user.role === 'admin' ? '超级管理员' : store.user.role === 'content_admin' ? '内容管理员' : '版主' }}</span>
+          <span>{{ store.user.role === 'admin' ? '超级管理员' : store.user.role === 'content_admin' ? '内容管理员' : store.user.role === 'moderator' ? '版主' : '普通用户' }}</span>
         </div>
       </div>
       <div class="topbar-right">

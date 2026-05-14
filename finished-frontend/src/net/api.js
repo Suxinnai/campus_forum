@@ -32,8 +32,8 @@ const deleteToken = () => {
     sessionStorage.removeItem(tokenAndExpire);
 }
 
-const storeToken = (token, remember, expire) => {
-    const auth = { token: token, expire: expire };
+const storeToken = (token, remember, expire, role) => {
+    const auth = { token: token, expire: expire, role: role };
     if (remember) {
         localStorage.setItem(tokenAndExpire, JSON.stringify(auth));
     } else {
@@ -112,7 +112,7 @@ const login = (username, password, remember) => {
     doPost("/api/auth/login", formData, {
         "Content-Type": "application/x-www-form-urlencoded"
     }, (data) => {
-        storeToken(data.token, remember, data.expireTime);
+        storeToken(data.token, remember, data.expireTime, data.role);
         ElMessage.success({ message: `欢迎用户${data.username}登录成功`, plain: true })
         const adminRoles = ['admin', 'content_admin', 'moderator']
         if (adminRoles.includes(data.role)) {

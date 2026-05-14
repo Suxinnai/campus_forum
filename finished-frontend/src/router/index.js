@@ -120,6 +120,18 @@ router.beforeEach((to, from, next) => {
     next("/home")
   } else if ((to.fullPath.startsWith("/home") || to.fullPath.startsWith("/admin")) && !loginStatus) {
     next("/login")
+  } else if (to.fullPath.startsWith("/admin")) {
+    const raw = localStorage.getItem("tokenAndExpire") || sessionStorage.getItem("tokenAndExpire")
+    if (raw) {
+      try {
+        const store = JSON.parse(raw)
+        if (store.role && !['admin', 'content_admin', 'moderator'].includes(store.role)) {
+          next("/home")
+          return
+        }
+      } catch (e) {}
+    }
+    next()
   } else {
     next();
   }
