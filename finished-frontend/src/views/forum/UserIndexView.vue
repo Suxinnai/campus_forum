@@ -21,6 +21,7 @@ const center = reactive({
   bookmarks: [],
   comments: [],
   likes: [],
+  privacy: { phone: true, qq: true, email: true, gender: true },
 });
 
 const geo = store.geo;
@@ -35,6 +36,7 @@ function loadCenter() {
     center.bookmarks = data.bookmarks || [];
     center.comments = data.comments || [];
     center.likes = data.likes || [];
+    center.privacy = data.privacy || { phone: true, qq: true, email: true, gender: true };
     center.loading = false;
   }, message => {
     center.loading = false;
@@ -119,6 +121,30 @@ const personalTags = computed(() => {
   }
   return tags.slice(0, 5);
 });
+
+function isPublic(field) {
+  return center.privacy?.[field] !== false;
+}
+
+function privacyValue(field, value, emptyText = "未填写") {
+  if (!isPublic(field)) return "未公开";
+  return value || emptyText;
+}
+
+function genderLabel() {
+  if (!isPublic("gender")) return "未公开";
+  if (center.details?.gender === 0) return "男";
+  if (center.details?.gender === 1) return "女";
+  return "未填写";
+}
+
+const profileBriefRows = computed(() => [
+  { label: "邮箱", value: privacyValue("email", center.account?.email, "未绑定"), hidden: !isPublic("email") },
+  { label: "性别", value: genderLabel(), hidden: !isPublic("gender") },
+  { label: "手机号", value: privacyValue("phone", center.details?.phone), hidden: !isPublic("phone") },
+  { label: "QQ / 微信", value: privacyValue("qq", center.details?.qq), hidden: !isPublic("qq") },
+  { label: "IP 定位", value: geo.label, hidden: false },
+]);
 
 function formatDate(time) {
   return time ? new Date(time).toLocaleDateString() : "";
@@ -278,10 +304,15 @@ function likeSourceLabel(item) {
         <div class="side-card">
           <h4 class="side-title">资料卡</h4>
           <div class="profile-brief">
-            <div class="brief-item"><span>邮箱</span><strong>{{ center.account?.email || "未绑定" }}</strong></div>
-            <div class="brief-item"><span>手机号</span><strong>{{ center.details?.phone || "未填写" }}</strong></div>
-            <div class="brief-item"><span>QQ / 微信</span><strong>{{ center.details?.qq || "未填写" }}</strong></div>
-            <div class="brief-item"><span>IP 定位</span><strong>{{ geo.label }}</strong></div>
+            <div
+              v-for="row in profileBriefRows"
+              :key="row.label"
+              class="brief-item"
+              :class="{ 'is-hidden': row.hidden }"
+            >
+              <span>{{ row.label }}</span>
+              <strong>{{ row.value }}</strong>
+            </div>
           </div>
           <div v-if="geo.ip" class="brief-foot">当前识别 IP：{{ geo.ip }}</div>
         </div>
@@ -362,6 +393,7 @@ function likeSourceLabel(item) {
 .brief-item:last-child { border-bottom: none; padding-bottom: 0; }
 .brief-item span { font-size: 12px; color: var(--el-text-color-placeholder); }
 .brief-item strong { font-size: 13px; color: var(--el-text-color-primary); word-break: break-word; }
+.brief-item.is-hidden strong { color: var(--el-text-color-placeholder); font-weight: 600; }
 .brief-foot { margin-top: 12px; font-size: 12px; color: var(--el-text-color-secondary); }
 .tags-cloud { display: flex; flex-wrap: wrap; gap: 8px; }
 .tag-pill { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1; }

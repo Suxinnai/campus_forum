@@ -83,6 +83,7 @@ public class AccountController {
         AccountDTO account = accountService.findAccountById(id);
         AccountDetailsDTO details = Optional.ofNullable(accountDetailsService.findAccountDetailsById(id))
                 .orElseGet(AccountDetailsDTO::new);
+        AccountPrivacyDTO privacy = accountPrivacyService.accountPrivacy(id);
 
         Page<TopicDTO> page = Page.of(1, 20);
         topicService.page(page, Wrappers.<TopicDTO>query().eq("uid", id).orderByDesc("time"));
@@ -166,6 +167,7 @@ public class AccountController {
         UserCenterVO vo = new UserCenterVO(
                 new AccountVO(account.getId(), account.getUsername(), account.getEmail(), account.getRole(), account.getAvatar(), account.getCreate_time()),
                 new AccountDetailsVO(details.getGender(), details.getPhone(), details.getQq(), details.getDesc(), details.getCover()),
+                new AccountPrivacyVO(privacy.isPhone(), privacy.isEmail(), privacy.isQq(), privacy.isGender()),
                 stats,
                 posts,
                 bookmarks,

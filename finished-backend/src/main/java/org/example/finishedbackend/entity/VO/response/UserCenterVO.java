@@ -10,6 +10,7 @@ import java.util.List;
 public class UserCenterVO {
     private AccountVO account;
     private AccountDetailsVO details;
+    private AccountPrivacyVO privacy;
     private UserCenterStatsVO stats;
     private List<TopicPreviewVO> posts;
     private List<TopicPreviewVO> bookmarks;
