@@ -162,19 +162,119 @@ const isToday = (d) =>
   calYear.value === today.getFullYear() &&
   calMonth.value === today.getMonth();
 
+const pad2 = value => String(value).padStart(2, '0')
+const todayKey = dateKey(today)
+const selectedDateKey = ref(todayKey);
+
+function dateKey(value) {
+  if (!value) return ''
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+}
+
+function monthDayLabel(key) {
+  if (!key) return ''
+  const [, month, day] = key.split('-')
+  return `${Number(month)}/${Number(day)}`
+}
+
+function scheduleRangeLabel(item) {
+  const start = dateKey(item.eventDate)
+  const end = dateKey(item.endDate || item.eventDate)
+  return start === end ? monthDayLabel(start) : `${monthDayLabel(start)}-${monthDayLabel(end)}`
+}
+
+function compareDateKey(a, b) {
+  return a.localeCompare(b)
+}
+
 // 公告数据
 const notices = ref([])
 get('/api/notice/list', data => { notices.value = (data || []).slice(0, 5) })
 
 // 活动/校历数据
 const activities = ref([])
+const schedules = ref([])
 get('/api/activity/list', data => {
   const now = new Date()
   activities.value = (data || [])
     .filter(a => new Date(a.endTime) >= now)
     .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+})
+get('/api/schedule/list', data => {
+  schedules.value = data || []
+})
+
+const calendarMarks = computed(() => {
+  const marks = new Set()
+  const monthPrefix = `${calYear.value}-${pad2(calMonth.value + 1)}-`
+  activities.value.forEach(item => {
+    const key = dateKey(item.startTime)
+    if (key.startsWith(monthPrefix)) marks.add(key)
+  })
+  schedules.value.forEach(item => {
+    const start = dateKey(item.eventDate)
+    const end = dateKey(item.endDate || item.eventDate)
+    if (!start) return
+    for (let day = 1; day <= 31; day++) {
+      const key = `${monthPrefix}${pad2(day)}`
+      if (compareDateKey(key, start) >= 0 && compareDateKey(key, end) <= 0) marks.add(key)
+    }
+  })
+  return marks
+})
+
+const selectedDateLabel = computed(() => {
+  const [, month, day] = selectedDateKey.value.split('-')
+  return `${Number(month)}月${Number(day)}日`
+})
+
+const selectedCalendarItems = computed(() => {
+  const selected = selectedDateKey.value
+  const scheduleItems = schedules.value
+    .filter(item => {
+      const start = dateKey(item.eventDate)
+      const end = dateKey(item.endDate || item.eventDate)
+      return start && compareDateKey(start, selected) <= 0 && compareDateKey(end, selected) >= 0
+    })
+    .map(item => ({
+      id: `schedule-${item.id}`,
+      title: item.title,
+      kind: '校历',
+      when: dateKey(item.eventDate) === dateKey(item.endDate || item.eventDate) ? '全天' : scheduleRangeLabel(item),
+      date: dateKey(item.eventDate),
+      route: null
+    }))
+  const activityItems = activities.value
+    .filter(item => compareDateKey(dateKey(item.startTime), selected) <= 0 && compareDateKey(dateKey(item.endTime || item.startTime), selected) >= 0)
+    .map(item => ({
+      id: `activity-${item.id}`,
+      title: item.title,
+      kind: '活动',
+      when: formatActivityTime(item.startTime),
+      date: dateKey(item.startTime),
+      route: '/home/activity'
+    }))
+  return [...scheduleItems, ...activityItems]
+    .sort((a, b) => compareDateKey(a.date, b.date))
     .slice(0, 3)
 })
+
+function hasCalendarItem(day) {
+  if (!day) return false
+  return calendarMarks.value.has(`${calYear.value}-${pad2(calMonth.value + 1)}-${pad2(day)}`)
+}
+
+function calendarCellKey(day) {
+  return `${calYear.value}-${pad2(calMonth.value + 1)}-${pad2(day)}`
+}
+
+function selectCalendarDay(day) {
+  if (!day) return
+  selectedDateKey.value = calendarCellKey(day)
+}
 
 function formatActivityTime(d) {
   if (!d) return ''
@@ -410,21 +510,36 @@ function formatActivityTime(d) {
                 v-for="(d, i) in calDays"
                 :key="i"
                 class="cal-cell"
-                :class="{ today: d && isToday(d), empty: !d }"
+                :class="{
+                  today: d && isToday(d),
+                  empty: !d,
+                  marked: d && hasCalendarItem(d),
+                  selected: d && calendarCellKey(d) === selectedDateKey
+                }"
+                @click="selectCalendarDay(d)"
               >{{ d || '' }}</span>
             </div>
             <div class="today-schedule">
               <div class="schedule-title">
-                <span>近期活动</span>
-                <i>{{ calMonthNum }}月{{ today.getDate() }}日</i>
+                <span>{{ selectedDateKey === todayKey ? '今日安排' : '当日安排' }}</span>
+                <i>{{ selectedDateLabel }}</i>
               </div>
               <ul class="schedule-list">
-                <li v-for="act in activities" :key="act.id" class="schedule-item" @click="router.push('/home/activity')" style="cursor:pointer">
-                  <div class="s-time">{{ formatActivityTime(act.startTime) }}</div>
-                  <div class="s-event">{{ act.title }}</div>
+                <li
+                  v-for="item in selectedCalendarItems"
+                  :key="item.id"
+                  class="schedule-item"
+                  :class="{ clickable: item.route }"
+                  @click="item.route && router.push(item.route)"
+                >
+                  <div class="s-event">
+                    <span class="s-kind" :class="item.kind === '活动' ? 'activity' : 'calendar'">{{ item.kind }}</span>
+                    <span class="s-name">{{ item.title }}</span>
+                    <span class="s-time">{{ item.when }}</span>
+                  </div>
                 </li>
-                <li v-if="!activities.length" class="schedule-item">
-                  <div class="s-event" style="color:var(--el-text-color-placeholder)">暂无近期活动</div>
+                <li v-if="!selectedCalendarItems.length" class="schedule-item">
+                  <div class="s-event is-empty">{{ selectedDateKey === todayKey ? '暂无今日安排' : '暂无当日安排' }}</div>
                 </li>
               </ul>
             </div>
@@ -986,6 +1101,7 @@ function formatActivityTime(d) {
 }
 
 .cal-cell {
+  position: relative;
   padding: 6px 2px;
   font-size: 12px;
   font-weight: 500;
@@ -994,14 +1110,41 @@ function formatActivityTime(d) {
   cursor: pointer;
   transition: background 0.15s;
 
-  &:hover:not(.empty):not(.today) { background: var(--el-fill-color-light); }
+  &:hover:not(.empty):not(.today):not(.selected) { background: var(--el-fill-color-light); }
   &.empty { cursor: default; }
+
+  &.selected:not(.today) {
+    background: var(--el-color-primary);
+    color: #fff;
+    font-weight: 800;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.28);
+  }
 
   &.today {
     background: #f59e0b;
     color: #fff;
     font-weight: 800;
     box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+  }
+
+  &.marked::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--el-color-primary);
+    transform: translateX(-50%);
+  }
+
+  &.today.marked::after {
+    background: #fff;
+  }
+
+  &.selected.marked::after {
+    background: #fff;
   }
 }
 
@@ -1027,26 +1170,66 @@ function formatActivityTime(d) {
   }
   .schedule-item {
     display: flex;
-    gap: 12px;
     align-items: center;
-    padding: 6px 0;
-  }
-  .s-time {
-    font-size: 14px;
-    font-weight: 700;
-    color: #f5a623;
-    width: 44px;
-    padding-top: 0;
+    padding: 0;
+
+    &.clickable {
+      cursor: pointer;
+
+      .s-event:hover {
+        background: var(--el-color-primary-light-9);
+      }
+    }
   }
   .s-event {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex: 1;
+    min-width: 0;
+    min-height: 34px;
     font-size: 12px;
     font-weight: 500;
     color: var(--el-text-color-regular);
     line-height: 1.5;
     background: var(--el-fill-color-lighter);
-    padding: 6px 10px;
+    padding: 7px 10px;
     border-radius: 8px;
+    transition: background 0.15s;
+
+    &.is-empty {
+      color: var(--el-text-color-placeholder);
+    }
+  }
+  .s-kind {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
+    font-size: 10px;
+    font-weight: 700;
+
+    &.activity {
+      background: #fff7ed;
+      color: #ea580c;
+    }
+  }
+  .s-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .s-time {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--el-text-color-placeholder);
+    white-space: nowrap;
   }
 }
 

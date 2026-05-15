@@ -13,4 +13,6 @@ public class UserCenterVO {
     private UserCenterStatsVO stats;
     private List<TopicPreviewVO> posts;
     private List<TopicPreviewVO> bookmarks;
+    private List<UserCenterCommentVO> comments;
+    private List<UserCenterLikeVO> likes;
 }

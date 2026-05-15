@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.util.Date;
 
 @Data
@@ -16,9 +17,9 @@ public class ScheduleDTO {
     String title;
     String description;
     @TableField("event_date")
-    Date eventDate;
+    LocalDate eventDate;
     @TableField("end_date")
-    Date endDate;
+    LocalDate endDate;
     String type;
     @TableField("create_time")
     Date createTime;

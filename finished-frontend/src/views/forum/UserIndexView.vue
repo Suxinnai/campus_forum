@@ -19,6 +19,8 @@ const center = reactive({
   stats: { posts: 0, comments: 0, likes: 0, bookmarks: 0 },
   posts: [],
   bookmarks: [],
+  comments: [],
+  likes: [],
 });
 
 const geo = store.geo;
@@ -31,6 +33,8 @@ function loadCenter() {
     center.stats = data.stats;
     center.posts = data.posts || [];
     center.bookmarks = data.bookmarks || [];
+    center.comments = data.comments || [];
+    center.likes = data.likes || [];
     center.loading = false;
   }, message => {
     center.loading = false;
@@ -115,6 +119,18 @@ const personalTags = computed(() => {
   }
   return tags.slice(0, 5);
 });
+
+function formatDate(time) {
+  return time ? new Date(time).toLocaleDateString() : "";
+}
+
+function goTopic(topicId) {
+  if (topicId) router.push("/home/topic/" + topicId);
+}
+
+function likeSourceLabel(item) {
+  return item.kind === "comment" ? "评论获赞" : "帖子获赞";
+}
 </script>
 
 <template>
@@ -190,6 +206,48 @@ const personalTags = computed(() => {
               <span class="card-stat"><MessageSquare :size="13" /> {{ item.comments || 0 }}</span>
               <span class="card-stat"><Heart :size="13" /> {{ item.like || 0 }}</span>
               <span class="card-stat"><Bookmark :size="13" /> {{ item.collect || 0 }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="activeTab === 'comments'" class="post-feed">
+          <el-empty v-if="center.comments.length === 0" description="暂无评论记录" />
+          <div
+            v-for="item in center.comments"
+            :key="item.id"
+            class="post-card activity-card"
+            @click="goTopic(item.topicId)"
+          >
+            <div class="card-top">
+              <span class="activity-badge comment"><MessageSquare :size="13" /> 我评论了</span>
+              <span class="card-time">{{ formatDate(item.time) }}</span>
+            </div>
+            <h3 class="card-title">{{ item.topicTitle }}</h3>
+            <p v-if="item.quote" class="comment-quote">回复：{{ item.quote }}</p>
+            <p class="card-text">{{ item.content || "暂无评论内容" }}</p>
+            <div class="card-footer">
+              <span class="card-stat"><Heart :size="13" /> {{ item.likeCount || 0 }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="activeTab === 'likes'" class="post-feed">
+          <el-empty v-if="center.likes.length === 0" description="暂无获赞内容" />
+          <div
+            v-for="item in center.likes"
+            :key="item.kind + '-' + item.id"
+            class="post-card activity-card"
+            @click="goTopic(item.topicId)"
+          >
+            <div class="card-top">
+              <span class="activity-badge like"><Heart :size="13" /> {{ likeSourceLabel(item) }}</span>
+              <span class="like-count"><Heart :size="13" fill="currentColor" /> {{ item.likeCount || 0 }}</span>
+            </div>
+            <h3 class="card-title">{{ item.title || item.topicTitle }}</h3>
+            <p class="card-text">{{ item.content || "暂无摘要" }}</p>
+            <div class="card-footer">
+              <span class="card-stat"><MessageSquare :size="13" /> {{ item.topicTitle }}</span>
+              <span class="card-stat">{{ formatDate(item.time) }}</span>
             </div>
           </div>
         </div>
@@ -289,6 +347,12 @@ const personalTags = computed(() => {
 .card-text { font-size: 14px; color: var(--el-text-color-secondary); line-height: 1.65; margin: 0 0 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card-footer { display: flex; gap: 16px; }
 .card-stat { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--el-text-color-placeholder); }
+.activity-card { cursor: pointer; }
+.activity-badge { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.activity-badge.comment { color: #2563eb; background: #eff6ff; }
+.activity-badge.like { color: #e11d48; background: #fff1f2; }
+.comment-quote { margin: 0 0 10px; padding: 10px 12px; border-left: 3px solid var(--el-border-color); border-radius: 8px; background: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); font-size: 13px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.like-count { display: inline-flex; align-items: center; gap: 5px; color: #e11d48; font-size: 13px; font-weight: 800; }
 .placeholder-section { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 16px; padding: 40px; }
 .content-side { display: flex; flex-direction: column; gap: 16px; }
 .side-card { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 16px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.03); }

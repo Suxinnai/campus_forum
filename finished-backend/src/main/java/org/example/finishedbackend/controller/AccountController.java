@@ -2,6 +2,8 @@ package org.example.finishedbackend.controller;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.example.finishedbackend.entity.DTO.AccountDTO;
@@ -19,6 +21,8 @@ import org.example.finishedbackend.entity.VO.response.AccountDetailsVO;
 import org.example.finishedbackend.entity.VO.response.AccountPrivacyVO;
 import org.example.finishedbackend.entity.VO.response.AccountVO;
 import org.example.finishedbackend.entity.VO.response.TopicPreviewVO;
+import org.example.finishedbackend.entity.VO.response.UserCenterCommentVO;
+import org.example.finishedbackend.entity.VO.response.UserCenterLikeVO;
 import org.example.finishedbackend.entity.VO.response.UserCenterStatsVO;
 import org.example.finishedbackend.entity.VO.response.UserCenterVO;
 import org.example.finishedbackend.mapper.TopicCommentMapper;
@@ -29,6 +33,8 @@ import org.example.finishedbackend.service.AccountService;
 import org.example.finishedbackend.service.TopicService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -89,6 +95,67 @@ public class AccountController {
                 .limit(6)
                 .toList();
 
+        Page<TopicCommentDTO> commentPage = Page.of(1, 20);
+        topicCommentMapper.selectPage(commentPage, Wrappers.<TopicCommentDTO>query()
+                .eq("uid", id)
+                .orderByDesc("time"));
+        List<UserCenterCommentVO> comments = commentPage.getRecords().stream()
+                .map(comment -> {
+                    TopicDTO topic = topicService.getById(comment.getTid());
+                    return new UserCenterCommentVO(
+                            comment.getId(),
+                            comment.getTid(),
+                            topic == null ? "原帖已删除" : topic.getTitle(),
+                            limitText(extractRichText(comment.getContent()), 240),
+                            resolveQuoteText(comment.getQuote()),
+                            comment.getTime(),
+                            Optional.ofNullable(comment.getLikeCount()).orElse(0)
+                    );
+                })
+                .toList();
+
+        List<UserCenterLikeVO> likeItems = new ArrayList<>();
+        topicService.list(Wrappers.<TopicDTO>query().eq("uid", id).orderByDesc("time")).stream()
+                .map(topic -> topicService.resolvePreviewById(topic.getId()))
+                .filter(Objects::nonNull)
+                .filter(topic -> topic.getLike() > 0)
+                .forEach(topic -> likeItems.add(new UserCenterLikeVO(
+                        "topic",
+                        topic.getId(),
+                        topic.getId(),
+                        topic.getTitle(),
+                        topic.getTitle(),
+                        limitText(topic.getText(), 240),
+                        topic.getTime(),
+                        topic.getLike()
+                )));
+
+        Page<TopicCommentDTO> likedCommentPage = Page.of(1, 20);
+        topicCommentMapper.selectPage(likedCommentPage, Wrappers.<TopicCommentDTO>query()
+                .eq("uid", id)
+                .gt("like_count", 0)
+                .orderByDesc("like_count")
+                .orderByDesc("time"));
+        likedCommentPage.getRecords().forEach(comment -> {
+            TopicDTO topic = topicService.getById(comment.getTid());
+            likeItems.add(new UserCenterLikeVO(
+                    "comment",
+                    comment.getId(),
+                    comment.getTid(),
+                    topic == null ? "原帖已删除" : topic.getTitle(),
+                    topic == null ? "评论获赞" : topic.getTitle(),
+                    limitText(extractRichText(comment.getContent()), 240),
+                    comment.getTime(),
+                    Optional.ofNullable(comment.getLikeCount()).orElse(0)
+            ));
+        });
+        likeItems.sort((a, b) -> {
+            int countCompare = Integer.compare(b.getLikeCount(), a.getLikeCount());
+            if (countCompare != 0) return countCompare;
+            return Long.compare(timeOf(b.getTime()), timeOf(a.getTime()));
+        });
+        List<UserCenterLikeVO> likes = likeItems.stream().limit(20).toList();
+
         UserCenterStatsVO stats = new UserCenterStatsVO(
                 (int) topicService.count(Wrappers.<TopicDTO>query().eq("uid", id)),
                 topicCommentMapper.selectCount(Wrappers.<TopicCommentDTO>query().eq("uid", id)).intValue(),
@@ -101,9 +168,48 @@ public class AccountController {
                 new AccountDetailsVO(details.getGender(), details.getPhone(), details.getQq(), details.getDesc(), details.getCover()),
                 stats,
                 posts,
-                bookmarks
+                bookmarks,
+                comments,
+                likes
         );
         return RestBean.success(vo, null);
+    }
+
+    private String resolveQuoteText(Integer quoteId) {
+        if (quoteId == null || quoteId <= 0) return null;
+        TopicCommentDTO quoted = topicCommentMapper.selectById(quoteId);
+        if (quoted == null) return "引用评论已删除";
+        return limitText(extractRichText(quoted.getContent()), 80);
+    }
+
+    private String extractRichText(String content) {
+        if (content == null || content.isBlank()) return "";
+        try {
+            JSONObject object = JSONObject.parseObject(content);
+            JSONArray ops = object.getJSONArray("ops");
+            if (ops == null) return content;
+            StringBuilder builder = new StringBuilder();
+            ops.forEach(op -> {
+                Object insert = JSONObject.from(op).get("insert");
+                if (insert instanceof String) {
+                    builder.append((String) insert);
+                }
+            });
+            String text = builder.toString().trim();
+            return text.isBlank() ? content : text;
+        } catch (Exception ignored) {
+            return content;
+        }
+    }
+
+    private String limitText(String text, int maxLength) {
+        if (text == null) return "";
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        return normalized.length() > maxLength ? normalized.substring(0, maxLength) + "..." : normalized;
+    }
+
+    private long timeOf(Date date) {
+        return date == null ? 0L : date.getTime();
     }
 
     @PostMapping("/save-details")

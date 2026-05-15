@@ -471,6 +471,17 @@ function deleteActivity(id) {
 }
 
 // ===== 校历日程管理（独立于活动）=====
+function toDateInputValue(value) {
+  if (!value) return ''
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function openAddSchedule() {
   scheduleEditMode.value = false
   Object.assign(scheduleForm, { id: null, title: '', description: '', eventDate: '', endDate: '', type: 'semester' })
@@ -483,8 +494,8 @@ function openEditSchedule(s) {
     id: s.id,
     title: s.title,
     description: s.description || '',
-    eventDate: s.eventDate ? s.eventDate.slice(0, 10) : '',
-    endDate: s.endDate ? s.endDate.slice(0, 10) : '',
+    eventDate: toDateInputValue(s.eventDate),
+    endDate: toDateInputValue(s.endDate),
     type: s.type || 'event'
   })
   showScheduleDialog.value = true
@@ -495,7 +506,15 @@ function submitSchedule() {
     ElMessage.warning('请填写日程标题和日期')
     return
   }
-  const payload = { ...scheduleForm }
+  if (scheduleForm.endDate && scheduleForm.endDate < scheduleForm.eventDate) {
+    ElMessage.warning('结束日期不能早于开始日期')
+    return
+  }
+  const payload = {
+    ...scheduleForm,
+    eventDate: scheduleForm.eventDate,
+    endDate: scheduleForm.endDate || null
+  }
   if (scheduleEditMode.value) {
     put('/api/admin/schedule/update', payload, () => {
       ElMessage.success('日程已更新')
@@ -546,8 +565,8 @@ function resolveFeedback(id) {
 }
 
 function deleteFeedback(id) {
-  ElMessageBox.confirm('确定删除此反馈？', '删除确认', {
-    confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning'
+  ElMessageBox.confirm('删除后该反馈将无法恢复，确定继续吗？', '删除反馈', {
+    confirmButtonText: '确认删除', cancelButtonText: '取消', type: 'error'
   }).then(() => {
     del(`/api/admin/feedback/delete?id=${id}`, () => {
       ElMessage.success('反馈已删除')
@@ -964,8 +983,8 @@ onMounted(() => {
                   </div>
                   <div class="schedule-date">
                     <Calendar :size="12" />
-                    {{ s.eventDate?.slice(0, 10) }}
-                    <template v-if="s.endDate"> → {{ s.endDate?.slice(0, 10) }}</template>
+                    {{ toDateInputValue(s.eventDate) }}
+                    <template v-if="s.endDate"> → {{ toDateInputValue(s.endDate) }}</template>
                   </div>
                   <div v-if="s.description" class="schedule-desc">{{ s.description }}</div>
                 </div>
@@ -1080,7 +1099,9 @@ onMounted(() => {
                   <button v-if="fb.status !== 'resolved'" class="tbtn sm ok" @click="resolveFeedback(fb.id)">
                     <Check :size="12" /> 标记已处理
                   </button>
-                  <button class="tbtn-icon danger" @click="deleteFeedback(fb.id)"><Trash2 :size="13" /></button>
+                  <button class="tbtn sm danger feedback-delete-btn" @click="deleteFeedback(fb.id)" title="删除反馈">
+                    <Trash2 :size="12" /> 删除
+                  </button>
                 </div>
               </div>
             </div>
@@ -2133,6 +2154,8 @@ onMounted(() => {
 .fb-title { font-size: 16px; font-weight: 800; color: var(--el-text-color-primary); margin-bottom: 8px; }
 .fb-content { font-size: 14px; color: var(--el-text-color-regular); line-height: 1.7; margin-bottom: 10px; }
 .fb-contact { font-size: 13px; font-weight: 500; color: var(--el-text-color-secondary); background: rgba(0,0,0,0.02); padding: 8px 12px; border-radius: 8px; }
+.fb-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.feedback-delete-btn { border: 1px solid #fecaca; box-shadow: none; }
 
 // Sensitive Words
 .word-input-row { display: flex; align-items: center; gap: 12px; padding: 20px 24px; border-bottom: 1px solid rgba(0,0,0,0.04); }
