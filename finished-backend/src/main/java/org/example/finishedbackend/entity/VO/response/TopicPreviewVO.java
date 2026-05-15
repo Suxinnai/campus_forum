@@ -25,4 +25,5 @@ public class TopicPreviewVO {
     int comments;
     List<String> tags;
     Integer top;
+    Integer featured;
 }

@@ -271,11 +271,9 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     @Override
     public List<TopicPreviewVO> listTopicCollects(int uid) {
-        return baseMapper.collectTopics(uid).stream().map(topic -> {
-            TopicPreviewVO vo = new TopicPreviewVO();
-            BeanUtils.copyProperties(topic, vo);
-            return vo;
-        }).toList();
+        return baseMapper.collectTopics(uid).stream()
+                .map(this::resolveToPreview)
+                .toList();
     }
 
     @Override
@@ -456,7 +454,7 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
                 interactCountWithPending(dto.getId(), "like"),
                 interactCountWithPending(dto.getId(), "collect"),
                 commentMapper.selectCount(Wrappers.<TopicCommentDTO>query().eq("tid", dto.getId())).intValue(),
-                null, dto.getTop());
+                null, dto.getTop(), dto.getFeatured());
         List<String> images = new LinkedList<>();
         StringBuilder previewText = new StringBuilder();
         try {

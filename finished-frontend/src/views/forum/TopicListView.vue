@@ -3,7 +3,7 @@ import {
   SquarePen, ThumbsUp, MessageSquare, Share2,
   TrendingUp, Flame, CalendarDays, Megaphone,
   Bookmark, Trash2, Quote, MoreHorizontal, RefreshCcw,
-  ChevronDown, ChevronUp, Pin
+  ChevronDown, ChevronUp, Pin, Star
 } from "lucide-vue-next";
 import { computed, reactive, ref, watch, onMounted, onActivated } from "vue";
 import { get, post, del } from "@/net/api.js";
@@ -230,18 +230,21 @@ function formatActivityTime(d) {
                 class="post-card"
                 @click="router.push('/home/topic/' + item.id)"
               >
-              <!-- 瀑布流缩略图 -->
-              <div class="waterfall-img-wrap" v-if="item.images && item.images.length">
-                <el-image
-                  :src="item.images[0]"
-                  fit="cover"
-                  class="waterfall-img"
-                  lazy
-                />
-              </div>
+                <!-- 瀑布流缩略图 -->
+                <div class="waterfall-img-wrap" v-if="item.images && item.images.length">
+                  <el-image
+                    :src="item.images[0]"
+                    fit="cover"
+                    class="waterfall-img"
+                    lazy
+                  />
+                </div>
 
-              <div class="post-body">
-                <div v-if="item.top === 1" class="pinned-badge"><Pin :size="12" /> 置顶</div>
+                <div class="post-body">
+                <div class="post-badges" v-if="item.top === 1 || item.featured === 1">
+                  <div v-if="item.top === 1" class="pinned-badge"><Pin :size="12" /> 置顶</div>
+                  <div v-if="item.featured === 1" class="featured-badge"><Star :size="12" /> 精华</div>
+                </div>
                 <div class="post-content" :style="{ borderLeft: `3px solid ${store.findTypeById(item.type)?.color || 'transparent'}`, paddingLeft: '12px' }">
                     <div class="post-meta-top">
                       <!-- 动态话题标签 (主+副) -->
@@ -250,42 +253,42 @@ function formatActivityTime(d) {
                         <span v-for="tag in item.tags.slice(1)" :key="tag" class="sub-card-tag">#{{ tag }}</span>
                       </div>
                       <span v-else class="main-card-tag" style="background: #f1f5f9; color: #64748b; opacity: 0.6">未分类</span>
-                      
+
                       <span class="post-time">{{ relativeTime(item.time) }}</span>
                     </div>
                     <h3 class="post-title">{{ item.title }}</h3>
                     <p class="post-excerpt">{{ stripMarkdown(item.text) }}</p>
                   </div>
-              </div>
+                </div>
 
-              <div class="post-footer">
-                <div class="footer-left">
-                  <el-avatar :size="20" :src="store.getAvatar(item.avatar, item.username)" class="compact-avatar" />
-                  <span class="meta-name">{{ item.username }}</span>
+                <div class="post-footer">
+                  <div class="footer-left">
+                    <el-avatar :size="20" :src="store.getAvatar(item.avatar, item.username)" class="compact-avatar" />
+                    <span class="meta-name">{{ item.username }}</span>
+                  </div>
+                  <div class="footer-actions">
+                    <div class="action-item" title="点赞"><ThumbsUp :size="12" /> {{ item.like || 0 }}</div>
+                    <div class="action-item" title="评论"><MessageSquare :size="12" /> {{ item.comments || 0 }}</div>
+                    <el-dropdown trigger="click" placement="bottom-end">
+                      <div class="action-more" @click.stop><MoreHorizontal :size="14" /></div>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item @click.stop="collectPost(item.id)">
+                            <Bookmark :size="14" style="margin-right:8px" /> 收藏
+                          </el-dropdown-item>
+                          <el-dropdown-item @click.stop="sharePost(item.id)">
+                            <Share2 :size="14" style="margin-right:8px" /> 分享
+                          </el-dropdown-item>
+                          <el-dropdown-item v-if="store.user.id === item.uid || store.user.role === 'admin'"
+                                            divided style="color:var(--el-color-danger)" @click.stop="deletePost(item.id)">
+                            <Trash2 :size="14" style="margin-right:8px" /> 删除
+                          </el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                  </div>
                 </div>
-                <div class="footer-actions">
-                  <div class="action-item" title="点赞"><ThumbsUp :size="12" /> {{ item.like || 0 }}</div>
-                  <div class="action-item" title="评论"><MessageSquare :size="12" /> {{ item.comments || 0 }}</div>
-                  <el-dropdown trigger="click" placement="bottom-end">
-                    <div class="action-more" @click.stop><MoreHorizontal :size="14" /></div>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item @click.stop="collectPost(item.id)">
-                          <Bookmark :size="14" style="margin-right:8px" /> 收藏
-                        </el-dropdown-item>
-                        <el-dropdown-item @click.stop="sharePost(item.id)">
-                          <Share2 :size="14" style="margin-right:8px" /> 分享
-                        </el-dropdown-item>
-                        <el-dropdown-item v-if="store.user.id === item.uid || store.user.role === 'admin'"
-                                          divided style="color:var(--el-color-danger)" @click.stop="deletePost(item.id)">
-                          <Trash2 :size="14" style="margin-right:8px" /> 删除
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
-                </div>
-              </div>
-            </article>
+              </article>
             </div>
             <div class="post-column">
               <article
@@ -305,7 +308,10 @@ function formatActivityTime(d) {
                 </div>
 
                 <div class="post-body">
-                  <div v-if="item.top === 1" class="pinned-badge"><Pin :size="12" /> 置顶</div>
+                  <div class="post-badges" v-if="item.top === 1 || item.featured === 1">
+                    <div v-if="item.top === 1" class="pinned-badge"><Pin :size="12" /> 置顶</div>
+                    <div v-if="item.featured === 1" class="featured-badge"><Star :size="12" /> 精华</div>
+                  </div>
                   <div class="post-content" :style="{ borderLeft: `3px solid ${store.findTypeById(item.type)?.color || 'transparent'}`, paddingLeft: '12px' }">
                       <div class="post-meta-top">
                         <div class="card-tags-area" v-if="item.tags && item.tags.length">
@@ -685,7 +691,9 @@ function formatActivityTime(d) {
 /* ===== 帖子列表 (双列错落布局) ===== */
 .post-list {
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
+  align-items: flex-start;
 }
 
 .post-column {
@@ -728,17 +736,30 @@ function formatActivityTime(d) {
   padding: 12px 16px 8px;
 }
 
-.pinned-badge {
+.post-badges {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.pinned-badge, .featured-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 2px 10px;
-  margin-bottom: 6px;
   font-size: 11px;
   font-weight: 700;
+  border-radius: 6px;
+}
+
+.pinned-badge {
   color: #ef4444;
   background: #fef2f2;
-  border-radius: 6px;
+}
+
+.featured-badge {
+  color: #d97706;
+  background: #fffbeb;
 }
 
 .post-content {
@@ -824,6 +845,8 @@ function formatActivityTime(d) {
 }
 
 .end-hint {
+  flex: 0 0 100%;
+  width: 100%;
   text-align: center;
   padding: 24px 0 8px;
   font-size: 13px;
@@ -1223,8 +1246,9 @@ function formatActivityTime(d) {
   .post-thumb { width: 80px; height: 60px; }
   .topic-tabs { gap: 16px; }
   .side-column { display: none; }
-  .post-list { flex-direction: column; }
-  .post-column { gap: 16px; }
+  .post-list { flex-direction: column; flex-wrap: nowrap; }
+  .post-column { width: 100%; gap: 16px; }
+  .end-hint { flex-basis: auto; }
 }
 
 @media (max-width: 600px) {

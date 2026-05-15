@@ -87,7 +87,7 @@ onMounted(fetchCollects)
         >
           <div class="card-main">
             <div class="card-top">
-              <TopicTag :type="item.type" />
+              <TopicTag :type="item.type" :tags="item.tags" />
               <span class="card-date">收藏于 {{ new Date(item.time).toLocaleDateString() }}</span>
             </div>
             <h3 class="card-title">{{ item.title }}</h3>

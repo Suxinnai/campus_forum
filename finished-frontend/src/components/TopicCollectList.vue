@@ -44,7 +44,7 @@ function deleteCollect(index, tid) {
         
         <div v-for="(item, index) in list" :key="item.id" class="collect-card" @click="emit('close'); router.push(`/home/topic/${item.id}`)">
           <div class="card-left">
-            <topic-tag :type="item.type" class="c-tag" />
+            <topic-tag :type="item.type" :tags="item.tags" class="c-tag" />
           </div>
           <div class="card-main">
             <div class="c-title">{{ item.title }}</div>
