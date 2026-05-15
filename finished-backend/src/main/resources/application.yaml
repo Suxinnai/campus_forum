@@ -18,8 +18,15 @@ spring:
       key: "${JWT_KEY:dev-key-change-me}"
   mail:
     host: "${MAIL_HOST:smtp.163.com}"
+    port: "${MAIL_PORT:465}"
     username: "${MAIL_USERNAME:}"
     password: "${MAIL_PASSWORD:}"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
   rabbitmq:
     addresses: "${RABBITMQ_HOST:localhost}"
     username: "${RABBITMQ_USER:guest}"
