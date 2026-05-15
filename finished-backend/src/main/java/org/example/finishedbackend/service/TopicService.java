@@ -11,6 +11,7 @@ import org.example.finishedbackend.entity.VO.request.TopicCreateVO;
 import org.example.finishedbackend.entity.VO.request.TopicUpdateVO;
 import org.example.finishedbackend.entity.VO.response.CommentVO;
 import org.example.finishedbackend.entity.VO.response.TopicDetailVO;
+import org.example.finishedbackend.entity.VO.response.TopicPageVO;
 import org.example.finishedbackend.entity.VO.response.TopicPreviewVO;
 import org.example.finishedbackend.entity.VO.response.TopicTopVO;
 import org.springframework.web.bind.annotation.RequestAttribute;
@@ -22,6 +23,7 @@ public interface TopicService extends IService<TopicDTO> {
     List<TopicTypeDTO> listTypes();
     String createTopic(int uid, TopicCreateVO vo);
     List<TopicPreviewVO> listTopicByPage(int page, int type);
+    TopicPageVO pageTopics(int page, int type, int size);
     List<TopicTopVO> listTopTopics();
     TopicPreviewVO resolvePreviewById(int tid);
     TopicDetailVO getTopic(int tid, int uid);

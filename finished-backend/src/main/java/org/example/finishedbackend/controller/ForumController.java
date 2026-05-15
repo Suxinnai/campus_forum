@@ -67,6 +67,13 @@ public class ForumController {
         return voList != null ? RestBean.success(voList, null) : RestBean.failure(400, "已经到头了~");
     }
 
+    @GetMapping("/page-topic")
+    public RestBean<TopicPageVO> pageTopic(@RequestParam @Min(0) int page,
+                                           @RequestParam int type,
+                                           @RequestParam(defaultValue = "10") int size) {
+        return RestBean.success(topic.pageTopics(page, type, size), null);
+    }
+
     @GetMapping("/top-topic")
     public RestBean<List<TopicTopVO>> topTopic() {
         return RestBean.success(topic.listTopTopics(), null);

@@ -57,4 +57,64 @@ public interface TopicMapper extends BaseMapper<TopicDTO> {
             where db_topic_interact_collect.uid = #{uid}
             """)
     List<TopicDTO> collectTopics(int uid);
+
+    @Select("""
+            select t.*,
+                   (
+                       coalesce(v.views, 0) * 1
+                       + coalesce(l.likes, 0) * 5
+                       + coalesce(c.comments, 0) * 8
+                       + coalesce(f.collects, 0) * 10
+                       + if(t.featured = 1, 8, 0)
+                       + if(t.top = 1, 5, 0)
+                   ) / pow(timestampdiff(hour, t.time, now()) + 2, 0.25) as hot_score
+            from db_topic t
+            left join (
+                select tid, count(*) views from db_user_behavior where type = 'view' group by tid
+            ) v on v.tid = t.id
+            left join (
+                select tid, count(*) likes from db_topic_interact_like group by tid
+            ) l on l.tid = t.id
+            left join (
+                select tid, count(*) collects from db_topic_interact_collect group by tid
+            ) f on f.tid = t.id
+            left join (
+                select tid, count(*) comments from db_topic_comment group by tid
+            ) c on c.tid = t.id
+            order by hot_score desc, t.time desc
+            """)
+    List<TopicDTO> selectHotTopics();
+
+    @Select("""
+            select t.*,
+                   (
+                       coalesce(v.views, 0) * 1
+                       + coalesce(l.likes, 0) * 5
+                       + coalesce(c.comments, 0) * 8
+                       + coalesce(f.collects, 0) * 10
+                       + if(t.featured = 1, 8, 0)
+                       + if(t.top = 1, 5, 0)
+                   ) / pow(timestampdiff(hour, t.time, now()) + 2, 0.25) as hot_score
+            from db_topic t
+            left join (
+                select tid, count(*) views from db_user_behavior where type = 'view' group by tid
+            ) v on v.tid = t.id
+            left join (
+                select tid, count(*) likes from db_topic_interact_like group by tid
+            ) l on l.tid = t.id
+            left join (
+                select tid, count(*) collects from db_topic_interact_collect group by tid
+            ) f on f.tid = t.id
+            left join (
+                select tid, count(*) comments from db_topic_comment group by tid
+            ) c on c.tid = t.id
+            order by hot_score desc, t.time desc
+            limit #{limit}
+            """)
+    List<TopicDTO> selectTopHotTopics(int limit);
+
+    @Select("""
+            select count(*) from db_user_behavior where tid = #{tid} and type = 'view'
+            """)
+    int viewCount(int tid);
 }

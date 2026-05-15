@@ -23,6 +23,8 @@ public class TopicPreviewVO {
     int like;
     int collect;
     int comments;
+    int views;
+    double hotScore;
     List<String> tags;
     Integer top;
     Integer featured;

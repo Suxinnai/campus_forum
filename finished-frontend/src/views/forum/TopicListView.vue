@@ -3,7 +3,7 @@ import {
   SquarePen, ThumbsUp, MessageSquare, Share2,
   TrendingUp, Flame, CalendarDays, Megaphone,
   Bookmark, Trash2, Quote, MoreHorizontal, RefreshCcw,
-  ChevronDown, ChevronUp, Pin, Star
+  ChevronDown, ChevronUp, Pin, Star, Eye
 } from "lucide-vue-next";
 import { computed, reactive, ref, watch, onMounted, onActivated } from "vue";
 import { get, post, del } from "@/net/api.js";
@@ -61,36 +61,63 @@ onMounted(() => {
   fetchYiyan();
 });
 
+function defaultVisualCapacity() {
+  return typeof window !== 'undefined' && window.innerWidth <= 768 ? 6 : 10
+}
+
 const topics = reactive({
   list: [],
   type: 0,
   page: 0,
+  visualCapacity: defaultVisualCapacity(),
+  total: 0,
+  pages: 0,
   end: false,
-  top: []
+  top: [],
+  loading: false
 })
 
-// 交替分配到左右两列，实现左→右排序 + 错落排版
-const leftColumn = computed(() => topics.list.filter((_, i) => i % 2 === 0))
-const rightColumn = computed(() => topics.list.filter((_, i) => i % 2 === 1))
+const topicColumns = computed(() => {
+  const total = topics.list.length
+  const even = total % 2 === 0
+  return [
+    topics.list.filter((_, i) => even ? i % 2 === 0 : i < total - 1 && i % 2 === 0),
+    topics.list.filter((_, i) => even ? i % 2 === 1 : i % 2 === 1 || i === total - 1)
+  ]
+})
 
 function updateList() {
-  if (topics.end) return
+  if (topics.loading || topics.end) return
+  topics.loading = true
   if (topics.type === -3) {
     // 推荐接口一次性返回，不分页
     get('/api/recommend/topics', data => {
-      if (data && data.length) {
-        data.forEach(item => topics.list.push(item))
-      }
+      topics.list = data || []
+      topics.total = topics.list.length
+      topics.pages = topics.list.length ? 1 : 0
       topics.end = true
+      topics.loading = false
+    }, () => {
+      topics.list = []
+      topics.total = 0
+      topics.pages = 0
+      topics.end = true
+      topics.loading = false
     })
     return
   }
-  get(`/api/forum/list-topic?page=${topics.page}&type=${topics.type}`, data => {
-    if (data) {
-      data.forEach(item => topics.list.push(item))
-      topics.page++;
-    }
-    if (!data || data.length < 5) topics.end = true;
+  get(`/api/forum/page-topic?page=${topics.page}&type=${topics.type}&size=${topics.visualCapacity}`, data => {
+    const records = data?.records || []
+    const existingIds = new Set(topics.list.map(item => item.id))
+    topics.list.push(...records.filter(item => !existingIds.has(item.id)))
+    topics.total = data?.total || 0
+    topics.pages = data?.pages || 0
+    topics.end = !records.length || topics.pages === 0 || topics.page >= topics.pages - 1
+    if (!topics.end) topics.page += 1
+    topics.loading = false
+  }, () => {
+    topics.end = true
+    topics.loading = false
   })
 }
 
@@ -104,7 +131,13 @@ function resetList() {
   topics.page = 0
   topics.list = []
   topics.end = false;
+  topics.visualCapacity = defaultVisualCapacity()
   updateList()
+}
+
+function hotMetric(item) {
+  const value = Number(item.hotScore || 0)
+  return value >= 10 ? Math.round(value) : value.toFixed(1)
 }
 
 
@@ -286,7 +319,7 @@ function formatActivityTime(d) {
 <template>
   <div class="page-container">
     <div class="main-layout">
-      
+
       <!-- 主内容区 -->
       <div class="main-column">
 
@@ -322,14 +355,21 @@ function formatActivityTime(d) {
 
         <!-- 帖子列表 -->
         <transition name="el-fade-in" mode="out-in">
-          <div v-if="topics.list.length" v-infinite-scroll="updateList" class="post-list">
-            <div class="post-column">
-              <article
-                v-for="item in leftColumn"
-                :key="item.id"
-                class="post-card"
-                @click="router.push('/home/topic/' + item.id)"
-              >
+          <div
+            v-if="topics.list.length"
+            v-infinite-scroll="updateList"
+            :infinite-scroll-disabled="topics.loading || topics.end"
+            infinite-scroll-distance="240"
+            class="post-stream"
+          >
+            <div class="post-list">
+              <div v-for="(column, columnIndex) in topicColumns" :key="columnIndex" class="post-column">
+                <article
+                  v-for="item in column"
+                  :key="item.id"
+                  class="post-card"
+                  @click="router.push('/home/topic/' + item.id)"
+                >
                 <!-- 瀑布流缩略图 -->
                 <div class="waterfall-img-wrap" v-if="item.images && item.images.length">
                   <el-image
@@ -367,6 +407,7 @@ function formatActivityTime(d) {
                     <span class="meta-name">{{ item.username }}</span>
                   </div>
                   <div class="footer-actions">
+                    <div class="action-item" title="浏览"><Eye :size="12" /> {{ item.views || 0 }}</div>
                     <div class="action-item" title="点赞"><ThumbsUp :size="12" /> {{ item.like || 0 }}</div>
                     <div class="action-item" title="评论"><MessageSquare :size="12" /> {{ item.comments || 0 }}</div>
                     <el-dropdown trigger="click" placement="bottom-end">
@@ -388,77 +429,14 @@ function formatActivityTime(d) {
                     </el-dropdown>
                   </div>
                 </div>
-              </article>
-            </div>
-            <div class="post-column">
-              <article
-                v-for="item in rightColumn"
-                :key="item.id"
-                class="post-card"
-                @click="router.push('/home/topic/' + item.id)"
-              >
-                <!-- 瀑布流缩略图 -->
-                <div class="waterfall-img-wrap" v-if="item.images && item.images.length">
-                  <el-image
-                    :src="item.images[0]"
-                    fit="cover"
-                    class="waterfall-img"
-                    lazy
-                  />
-                </div>
-
-                <div class="post-body">
-                  <div class="post-badges" v-if="item.top === 1 || item.featured === 1">
-                    <div v-if="item.top === 1" class="pinned-badge"><Pin :size="12" /> 置顶</div>
-                    <div v-if="item.featured === 1" class="featured-badge"><Star :size="12" /> 精华</div>
-                  </div>
-                  <div class="post-content" :style="{ borderLeft: `3px solid ${store.findTypeById(item.type)?.color || 'transparent'}`, paddingLeft: '12px' }">
-                      <div class="post-meta-top">
-                        <div class="card-tags-area" v-if="item.tags && item.tags.length">
-                          <span class="main-card-tag">{{ item.tags[0] }}</span>
-                          <span v-for="tag in item.tags.slice(1)" :key="tag" class="sub-card-tag">#{{ tag }}</span>
-                        </div>
-                        <span v-else class="main-card-tag" style="background: #f1f5f9; color: #64748b; opacity: 0.6">未分类</span>
-                        <span class="post-time">{{ relativeTime(item.time) }}</span>
-                      </div>
-                      <h3 class="post-title">{{ item.title }}</h3>
-                      <p class="post-excerpt">{{ stripMarkdown(item.text) }}</p>
-                    </div>
-                </div>
-
-                <div class="post-footer">
-                  <div class="footer-left">
-                    <el-avatar :size="20" :src="store.getAvatar(item.avatar, item.username)" class="compact-avatar" />
-                    <span class="meta-name">{{ item.username }}</span>
-                  </div>
-                  <div class="footer-actions">
-                    <div class="action-item" title="点赞"><ThumbsUp :size="12" /> {{ item.like || 0 }}</div>
-                    <div class="action-item" title="评论"><MessageSquare :size="12" /> {{ item.comments || 0 }}</div>
-                    <el-dropdown trigger="click" placement="bottom-end">
-                      <div class="action-more" @click.stop><MoreHorizontal :size="14" /></div>
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item @click.stop="collectPost(item.id)">
-                            <Bookmark :size="14" style="margin-right:8px" /> 收藏
-                          </el-dropdown-item>
-                          <el-dropdown-item @click.stop="sharePost(item.id)">
-                            <Share2 :size="14" style="margin-right:8px" /> 分享
-                          </el-dropdown-item>
-                          <el-dropdown-item v-if="store.user.id === item.uid || store.user.role === 'admin'"
-                                            divided style="color:var(--el-color-danger)" @click.stop="deletePost(item.id)">
-                            <Trash2 :size="14" style="margin-right:8px" /> 删除
-                          </el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                  </div>
-                </div>
-              </article>
+                </article>
+              </div>
             </div>
 
-            <div v-if="topics.end" class="end-hint">— 已经到底了 —</div>
+            <div v-if="topics.loading" class="stream-status">正在加载更多...</div>
+            <div v-else-if="topics.end" class="end-hint">— 已经到底了 —</div>
           </div>
-          <el-empty v-else description="暂无内容" style="margin-top: 60px;" />
+          <el-empty v-else v-loading="topics.loading" description="暂无内容" style="margin-top: 60px;" />
         </transition>
       </div>
 
@@ -466,11 +444,11 @@ function formatActivityTime(d) {
       <aside class="side-column">
         <div class="sticky-side">
 
-          <!-- 热门话题榜 -->
+          <!-- 今日热榜 -->
           <div class="widget-card" v-if="topics.top && topics.top.length">
             <div class="widget-header">
               <TrendingUp :size="16" class="widget-icon" />
-              热门话题榜
+              今日热榜
             </div>
             <ul class="hot-list">
               <li
@@ -481,7 +459,8 @@ function formatActivityTime(d) {
               >
                 <span class="hot-rank" :class="`rank-${index + 1}`">{{ index + 1 }}</span>
                 <span class="hot-title">{{ item.title }}</span>
-                <Flame :size="13" class="hot-flame" v-if="index < 3" />
+                <span class="hot-score">{{ hotMetric(item) }}</span>
+                <Flame :size="13" class="hot-flame" />
               </li>
             </ul>
             <div
@@ -804,9 +783,13 @@ function formatActivityTime(d) {
 }
 
 /* ===== 帖子列表 (双列错落布局) ===== */
+.post-stream {
+  display: flex;
+  flex-direction: column;
+}
+
 .post-list {
   display: flex;
-  flex-wrap: wrap;
   gap: 20px;
   align-items: flex-start;
 }
@@ -921,7 +904,7 @@ function formatActivityTime(d) {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  
+
   .meta-name {
     font-size: 12px;
     color: var(--el-text-color-regular);
@@ -954,18 +937,30 @@ function formatActivityTime(d) {
     border-radius: 50%;
     cursor: pointer;
     transition: background 0.2s;
-    
+
     &:hover { background: var(--el-fill-color-light); }
   }
 }
 
 .end-hint {
-  flex: 0 0 100%;
+  flex: none;
   width: 100%;
+  margin-top: 48px;
   text-align: center;
   padding: 24px 0 8px;
   font-size: 13px;
   color: var(--el-text-color-placeholder);
+}
+
+.stream-status {
+  flex: none;
+  width: 100%;
+  margin-top: 36px;
+  text-align: center;
+  padding: 18px 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-color-primary);
 }
 
 /* ===== Widget 通用 ===== */
@@ -1045,6 +1040,7 @@ function formatActivityTime(d) {
 
 .hot-title {
   flex: 1;
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--el-text-color-primary);
@@ -1052,6 +1048,18 @@ function formatActivityTime(d) {
   overflow: hidden;
   text-overflow: ellipsis;
   transition: color 0.15s;
+}
+
+.hot-score {
+  flex-shrink: 0;
+  min-width: 30px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-radius: 999px;
+  padding: 2px 6px;
 }
 
 .hot-flame {
@@ -1322,7 +1330,7 @@ function formatActivityTime(d) {
   align-items: center;
   color: var(--el-color-primary);
   margin-bottom: 16px;
-  
+
   .y-title {
     display: flex;
     align-items: center;
@@ -1429,7 +1437,7 @@ function formatActivityTime(d) {
   .post-thumb { width: 80px; height: 60px; }
   .topic-tabs { gap: 16px; }
   .side-column { display: none; }
-  .post-list { flex-direction: column; flex-wrap: nowrap; }
+  .post-list { flex-direction: column; flex-wrap: nowrap; gap: 16px; }
   .post-column { width: 100%; gap: 16px; }
   .end-hint { flex-basis: auto; }
 }
@@ -1439,5 +1447,3 @@ function formatActivityTime(d) {
   .hero-overlay { padding: 20px; h1 { font-size: 20px; } }
 }
 </style>
-
-

@@ -13,4 +13,6 @@ public class TopicTopVO {
     int id;
     String title;
     Date time;
+    int views;
+    double hotScore;
 }

@@ -13,6 +13,7 @@ import org.example.finishedbackend.entity.VO.request.TopicCreateVO;
 import org.example.finishedbackend.entity.VO.request.TopicUpdateVO;
 import org.example.finishedbackend.entity.VO.response.CommentVO;
 import org.example.finishedbackend.entity.VO.response.TopicDetailVO;
+import org.example.finishedbackend.entity.VO.response.TopicPageVO;
 import org.example.finishedbackend.entity.VO.response.TopicPreviewVO;
 import org.example.finishedbackend.entity.VO.response.TopicTopVO;
 import org.example.finishedbackend.mapper.*;
@@ -233,40 +234,77 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     @Override
     public List<TopicPreviewVO> listTopicByPage(int pageNumber, int type) {
-        String key = Const.FORUM_TOPIC_PREVIEW_CACHE + pageNumber + ":" + type;
-        List<TopicPreviewVO> voList = cacheUtils.getListFromCache(key, TopicPreviewVO.class);
-        if (voList != null)
-            return voList;
-        Page<TopicDTO> page = Page.of(pageNumber + 1, 10);
+        return pageTopics(pageNumber, type, 10).getRecords();
+    }
+
+    @Override
+    public TopicPageVO pageTopics(int pageNumber, int type, int size) {
+        int capacity = Math.max(5, Math.min(size, 30));
+        List<TopicDTO> candidates = topicCandidates(type);
+        List<List<TopicDTO>> visualPages = splitByVisualCapacity(candidates, capacity);
+        List<TopicDTO> currentPage = pageNumber >= 0 && pageNumber < visualPages.size()
+                ? visualPages.get(pageNumber)
+                : List.of();
+        List<TopicPreviewVO> voList = currentPage.stream().map(this::resolveToPreview).collect(Collectors.toList());
+        return new TopicPageVO(voList, pageNumber, capacity, candidates.size(), visualPages.size());
+    }
+
+    private List<TopicDTO> topicCandidates(int type) {
         if (type == -1) {
-            baseMapper.selectPage(page, Wrappers.<TopicDTO>query().orderByDesc("time"));
-        } else if (type == -2 || type == 0) {
-            baseMapper.selectPage(page, Wrappers.<TopicDTO>query().orderByDesc("time"));
-        } else {
-            baseMapper.selectPage(page, Wrappers.<TopicDTO>query().eq("type", type).orderByDesc("time"));
+            return baseMapper.selectHotTopics();
         }
-        List<TopicDTO> list = page.getRecords();
-        if (list.isEmpty())
-            return null;
-        voList = list.stream().map(this::resolveToPreview).collect(Collectors.toList());
-        if (type == -1) {
-            voList.sort((a, b) -> b.getLike() - a.getLike());
+        if (type == -2 || type == 0) {
+            List<TopicDTO> pinned = baseMapper.selectList(Wrappers.<TopicDTO>query()
+                    .eq("top", 1)
+                    .orderByDesc("time"));
+            List<TopicDTO> normal = baseMapper.selectList(Wrappers.<TopicDTO>query()
+                    .eq("top", 0)
+                    .orderByDesc("time"));
+            List<TopicDTO> combined = new ArrayList<>(pinned.size() + normal.size());
+            combined.addAll(pinned);
+            combined.addAll(normal);
+            return combined;
         }
-        // 第一页且全部/最新tab时，将置顶帖排在最前面
-        if (pageNumber == 0 && (type == 0 || type == -2)) {
-            List<TopicDTO> pinnedDtos = baseMapper.selectList(Wrappers.<TopicDTO>query()
-                    .eq("top", 1).orderByDesc("time"));
-            if (pinnedDtos != null && !pinnedDtos.isEmpty()) {
-                Set<Integer> pinnedIds = pinnedDtos.stream().map(TopicDTO::getId).collect(Collectors.toSet());
-                voList.removeIf(v -> pinnedIds.contains(v.getId()));
-                List<TopicPreviewVO> pinnedVos = pinnedDtos.stream()
-                        .map(this::resolveToPreview).collect(Collectors.toList());
-                pinnedVos.addAll(voList);
-                voList = pinnedVos;
+        return baseMapper.selectList(Wrappers.<TopicDTO>query().eq("type", type).orderByDesc("time"));
+    }
+
+    private List<List<TopicDTO>> splitByVisualCapacity(List<TopicDTO> candidates, int capacity) {
+        List<List<TopicDTO>> pages = new ArrayList<>();
+        List<TopicDTO> current = new ArrayList<>();
+        int currentWeight = 0;
+        for (TopicDTO topic : candidates) {
+            int weight = topicVisualWeight(topic);
+            if (!current.isEmpty() && currentWeight + weight > capacity) {
+                pages.add(current);
+                current = new ArrayList<>();
+                currentWeight = 0;
             }
+            current.add(topic);
+            currentWeight += weight;
         }
-        cacheUtils.saveListToCache(key, voList, 60);
-        return voList;
+        if (!current.isEmpty()) {
+            pages.add(current);
+        }
+        return pages;
+    }
+
+    private int topicVisualWeight(TopicDTO topic) {
+        return topicHasImage(topic) ? 2 : 1;
+    }
+
+    private boolean topicHasImage(TopicDTO topic) {
+        try {
+            JSONObject content = JSONObject.parseObject(topic.getContent());
+            JSONArray ops = content.getJSONArray("ops");
+            if (ops == null) return false;
+            for (Object op : ops) {
+                Object insert = JSONObject.from(op).get("insert");
+                if (insert instanceof Map<?, ?> map && map.get("image") != null) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
 
     @Override
@@ -278,33 +316,13 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     @Override
     public List<TopicTopVO> listTopTopics() {
-        // 只取当天发布的帖子，按点赞数降序取前5作为今日热门
-        Calendar cal = Calendar.getInstance();
-        cal.set(Calendar.HOUR_OF_DAY, 0);
-        cal.set(Calendar.MINUTE, 0);
-        cal.set(Calendar.SECOND, 0);
-        cal.set(Calendar.MILLISECOND, 0);
-        Date todayStart = cal.getTime();
-
-        List<TopicDTO> topics = baseMapper.selectList(Wrappers.<TopicDTO>query()
-                .select("id", "title", "time")
-                .ge("time", todayStart)
-                .orderByDesc("time"));
-        // 如果当天帖子不足5条，补充最近的帖子
-        if (topics.size() < 5) {
-            Set<Integer> existIds = topics.stream().map(TopicDTO::getId).collect(Collectors.toSet());
-            List<TopicDTO> recent = baseMapper.selectList(Wrappers.<TopicDTO>query()
-                    .select("id", "title", "time")
-                    .lt("time", todayStart)
-                    .orderByDesc("time")
-                    .last("LIMIT " + (5 - topics.size())));
-            recent.stream().filter(t -> !existIds.contains(t.getId())).forEach(topics::add);
-        }
-        return topics.stream()
-                .sorted((a, b) -> baseMapper.interactCount(b.getId(), "like")
-                        - baseMapper.interactCount(a.getId(), "like"))
-                .limit(5)
-                .map(topic -> new TopicTopVO(topic.getId(), topic.getTitle(), topic.getTime()))
+        return baseMapper.selectTopHotTopics(5).stream()
+                .map(topic -> new TopicTopVO(
+                        topic.getId(),
+                        topic.getTitle(),
+                        topic.getTime(),
+                        baseMapper.viewCount(topic.getId()),
+                        Optional.ofNullable(topic.getHotScore()).orElse(0D)))
                 .toList();
     }
 
@@ -454,6 +472,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
                 interactCountWithPending(dto.getId(), "like"),
                 interactCountWithPending(dto.getId(), "collect"),
                 commentMapper.selectCount(Wrappers.<TopicCommentDTO>query().eq("tid", dto.getId())).intValue(),
+                baseMapper.viewCount(dto.getId()),
+                Optional.ofNullable(dto.getHotScore()).orElse(0D),
                 null, dto.getTop(), dto.getFeatured());
         List<String> images = new LinkedList<>();
         StringBuilder previewText = new StringBuilder();
