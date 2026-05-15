@@ -329,11 +329,12 @@ INSERT INTO db_book (title, author, isbn, category, description, location, avail
 CREATE TABLE IF NOT EXISTS db_sensitive_word (
     id   INT PRIMARY KEY AUTO_INCREMENT,
     word VARCHAR(50) NOT NULL UNIQUE COMMENT '敏感词（唯一）',
+    type VARCHAR(20) NOT NULL DEFAULT 'sensitive' COMMENT '词类型: sensitive/forbidden',
     INDEX idx_word (word)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 预置初始敏感词（可在管理后台添加/删除）
-INSERT INTO db_sensitive_word (word) VALUES ('垃圾'), ('广告'), ('骗子');
+INSERT INTO db_sensitive_word (word, type) VALUES ('垃圾', 'sensitive'), ('广告', 'sensitive'), ('骗子', 'sensitive');
 
 -- ---------------------------------------------------
 -- 20. 资源收藏表 (db_resource_collect) 【新增】

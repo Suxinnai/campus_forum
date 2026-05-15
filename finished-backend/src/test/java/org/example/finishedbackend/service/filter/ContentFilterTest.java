@@ -302,6 +302,19 @@ public class ContentFilterTest {
         assertFalse(result.contains("敏感词"), "Sensitive word should be replaced");
     }
 
+    @Test
+    public void testReplaceSensitiveWords_SkipsForbiddenTypedWords() {
+        // Arrange
+        insertWord("禁止词", "forbidden");
+        String content = "这条评论包含禁止词";
+
+        // Act
+        String result = contentFilter.replaceSensitiveWords(content);
+
+        // Assert
+        assertEquals(content, result, "Forbidden typed words should be blocked by filter instead of masked");
+    }
+
     // ========== Comprehensive Filter Tests ==========
 
     /**
@@ -420,11 +433,33 @@ public class ContentFilterTest {
         assertNull(result.getFilteredContent(), "Filtered content should be null");
     }
 
+    @Test
+    public void testFilter_UsesExplicitWordType() {
+        // Arrange
+        insertWord("明确拦截", "forbidden");
+        insertWord("明确替换", "sensitive");
+
+        // Act
+        FilterResult blocked = contentFilter.filter("这条评论需要明确拦截");
+        FilterResult masked = contentFilter.filter("这条评论需要明确替换");
+
+        // Assert
+        assertFalse(blocked.isPassed(), "Forbidden typed word should reject the content");
+        assertEquals("明确拦截", blocked.getForbiddenWord(), "Should report the explicitly forbidden word");
+        assertTrue(masked.isPassed(), "Sensitive typed word should pass after masking");
+        assertEquals("这条评论需要****", masked.getFilteredContent(), "Sensitive typed word should be masked");
+    }
+
     // ========== Helper Methods ==========
 
     private void insertWord(String word) {
+        insertWord(word, null);
+    }
+
+    private void insertWord(String word, String type) {
         SensitiveWordDTO dto = new SensitiveWordDTO();
         dto.setWord(word);
+        dto.setType(type);
         sensitiveWordMapper.insert(dto);
     }
 }

@@ -57,7 +57,7 @@ public class ResourceController {
     public void download(@PathVariable Integer id, @RequestAttribute("id") int uid, HttpServletResponse response) {
         try {
             log.info("用户 {} 正在下载资源 ID: {}", uid, id);
-            ResourceDTO dto = resourceService.downloadResource(id, response.getOutputStream());
+            ResourceDTO dto = resourceService.getById(id);
             if (dto == null) {
                 response.setStatus(404);
                 return;
@@ -65,6 +65,7 @@ public class ResourceController {
             response.setContentType("application/octet-stream");
             response.setHeader("Content-Disposition",
                     "attachment;filename=" + URLEncoder.encode(dto.getFileName(), StandardCharsets.UTF_8));
+            resourceService.downloadResource(id, response.getOutputStream());
         } catch (Exception e) {
             log.error("资源下载失败：{}", e.getMessage());
             response.setStatus(500);

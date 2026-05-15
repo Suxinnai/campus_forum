@@ -49,7 +49,7 @@ public class ImageServiceImpl extends ServiceImpl<ImageStoreMapper, StoreImageDT
     public String uploadAvatar(MultipartFile file, int id) throws IOException {
         String imageName = UUID.randomUUID().toString().replace("-", "") + ".jpg";
         String relativePath = "/avatar/" + imageName;
-        Path target = Paths.get(storagePath + relativePath);
+        Path target = resolveStoragePath(relativePath);
         Files.createDirectories(target.getParent());
         file.transferTo(target);
 
@@ -68,7 +68,7 @@ public class ImageServiceImpl extends ServiceImpl<ImageStoreMapper, StoreImageDT
     public String uploadCover(MultipartFile file, int id) throws IOException {
         String imageName = UUID.randomUUID().toString().replace("-", "") + ".jpg";
         String relativePath = "/cover/" + imageName;
-        Path target = Paths.get(storagePath + relativePath);
+        Path target = resolveStoragePath(relativePath);
         Files.createDirectories(target.getParent());
         file.transferTo(target);
 
@@ -94,7 +94,7 @@ public class ImageServiceImpl extends ServiceImpl<ImageStoreMapper, StoreImageDT
         String imageName = UUID.randomUUID().toString().replace("-", "") + ".jpg";
         Date date = new Date();
         String relativePath = "/cache/" + format.format(date) + "/" + imageName;
-        Path target = Paths.get(storagePath + relativePath);
+        Path target = resolveStoragePath(relativePath);
         Files.createDirectories(target.getParent());
         file.transferTo(target);
 
@@ -106,7 +106,7 @@ public class ImageServiceImpl extends ServiceImpl<ImageStoreMapper, StoreImageDT
 
     @Override
     public void fetchImage(OutputStream stream, String image) throws Exception {
-        Path path = Paths.get(storagePath + image);
+        Path path = resolveStoragePath(image);
         if (!Files.exists(path)) {
             throw new FileNotFoundException("图片不存在: " + image);
         }
@@ -116,9 +116,22 @@ public class ImageServiceImpl extends ServiceImpl<ImageStoreMapper, StoreImageDT
     private void deleteOldFile(String relativePath) {
         if (relativePath == null || relativePath.isEmpty()) return;
         try {
-            Files.deleteIfExists(Paths.get(storagePath + relativePath));
-        } catch (IOException e) {
+            Files.deleteIfExists(resolveStoragePath(relativePath));
+        } catch (Exception e) {
             log.warn("删除旧头像失败: {}", e.getMessage());
         }
+    }
+
+    private Path resolveStoragePath(String relativePath) {
+        Path root = Paths.get(storagePath).toAbsolutePath().normalize();
+        String cleanRelativePath = relativePath == null ? "" : relativePath.replace("\\", "/");
+        while (cleanRelativePath.startsWith("/")) {
+            cleanRelativePath = cleanRelativePath.substring(1);
+        }
+        Path target = root.resolve(cleanRelativePath).normalize();
+        if (!target.startsWith(root)) {
+            throw new SecurityException("非法文件路径");
+        }
+        return target;
     }
 }

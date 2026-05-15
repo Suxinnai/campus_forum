@@ -13,6 +13,7 @@ public class TopicDetailVO {
     Integer id;
     String title;
     String content;
+    String rawContent;
     Integer type;
     Date time;
     User user;
@@ -21,6 +22,7 @@ public class TopicDetailVO {
     int like;
     int collect;
     java.util.List<String> tags;
+    java.util.List<String> images;
 
     @Data
     @AllArgsConstructor

@@ -1,15 +1,17 @@
 <script setup>
 import {get, post, del} from "@/net/api.js";
 import {useRoute} from "vue-router";
-import {reactive, ref, onMounted, nextTick, computed} from "vue";
+import {reactive, ref, onMounted, nextTick, computed, defineAsyncComponent} from "vue";
 import { ArrowLeft, EditPen, Female, Male, Delete, Promotion } from "@element-plus/icons-vue";
 import { ThumbsUp, Star, Share2, MessageCircle, Send, CornerDownRight } from "lucide-vue-next";
 import router from "@/router/index.js";
 import {ElMessage, ElMessageBox} from "element-plus";
 import {useAppStore} from "@/stores/app-store.js";
-import TopicEditor from "@/components/TopicEditor.vue";
-import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
+import DOMPurify from 'dompurify';
+
+const TopicEditor = defineAsyncComponent(() => import("@/components/TopicEditor.vue"));
+const MdPreview = defineAsyncComponent(() => import('md-editor-v3').then(module => module.MdPreview));
 
 const route = useRoute();
 const store = useAppStore();
@@ -106,14 +108,25 @@ function renderOps(ops) {
         if (op.attributes.italic) text = `<em>${text}</em>`;
         if (op.attributes.underline) text = `<u>${text}</u>`;
         if (op.attributes.link) {
-          const href = op.attributes.link.replace(/"/g, '');
-          text = `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#409eff">${text}</a>`;
+          const href = safeLink(op.attributes.link);
+          if (href) {
+            text = `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#409eff">${text}</a>`;
+          }
         }
       }
       result += text;
     }
   }
-  return result.replace(/\n/g, '<br/>');
+  return DOMPurify.sanitize(result.replace(/\n/g, '<br/>'), { ADD_ATTR: ['target'] });
+}
+
+function safeLink(link) {
+  try {
+    const url = new URL(String(link).replace(/"/g, ''), window.location.origin);
+    return ['http:', 'https:', 'mailto:'].includes(url.protocol) ? url.href : '';
+  } catch (e) {
+    return '';
+  }
 }
 
 // ======= 互动 =======
@@ -233,7 +246,7 @@ function getCommentText(content) {
 const likeCount    = computed(() => topic.data?.like     ?? 0);
 const collectCount = computed(() => topic.data?.collect  ?? 0);
 const commentCount = computed(() => topic.data?.comments ?? 0);
-const parsed       = computed(() => topic.data ? parseContent(topic.data.content) : null);
+const parsed       = computed(() => topic.data ? parseContent(topic.data.rawContent || topic.data.content) : null);
 const displayTags  = computed(() => topic.data?.tags?.length ? topic.data.tags : (parsed.value?.tags || []));
 </script>
 
@@ -436,7 +449,7 @@ const displayTags  = computed(() => topic.data?.tags?.length ? topic.data.tags :
 
     <topic-editor
       :show="edit"
-      :default-text="topic.data.content"
+      :default-text="topic.data.rawContent || topic.data.content"
       :default-title="topic.data.title"
       :default-type="topic.data.type"
       @close="edit = false; init()"

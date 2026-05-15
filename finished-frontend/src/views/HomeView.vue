@@ -1,13 +1,14 @@
 <script setup>
 import { get, del, logout } from "@/net/api.js";
 import { useAppStore } from "@/stores/app-store.js";
-import { computed, ref, watch } from "vue";
+import { computed, defineAsyncComponent, ref, watch } from "vue";
 import { Bell, Check, Tent, BookOpen, BarChart2, Settings, LogOut, Sun, Moon, Home, GraduationCap, Users, Bookmark, PlusSquare, Plus, Link, MessageSquare, User, Search } from "lucide-vue-next";
 import router from "@/router/index.js";
 import axios from "axios";
 import LightCard from "@/components/LightCard.vue";
 import { useDark } from "@vueuse/core";
-import TopicEditor from "@/components/TopicEditor.vue";
+
+const TopicEditor = defineAsyncComponent(() => import("@/components/TopicEditor.vue"));
 
 const store = useAppStore();
 const loading = ref(true);

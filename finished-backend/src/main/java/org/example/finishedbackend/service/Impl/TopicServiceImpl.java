@@ -19,6 +19,7 @@ import org.example.finishedbackend.entity.VO.response.TopicTopVO;
 import org.example.finishedbackend.mapper.*;
 import org.example.finishedbackend.service.NotificationService;
 import org.example.finishedbackend.service.TopicService;
+import org.example.finishedbackend.service.filter.ContentFilter;
 import org.example.finishedbackend.utils.CacheUtils;
 import org.example.finishedbackend.utils.Const;
 import org.example.finishedbackend.utils.FlowUtils;
@@ -62,7 +63,7 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     StringRedisTemplate template;
 
     @Resource
-    SensitiveWordMapper sensitiveWordMapper;
+    ContentFilter contentFilter;
 
     // 预处理listTypes的Id;
     private Set<Integer> types = null;
@@ -95,9 +96,9 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "文章类型非法！";
         if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_CREATE_COUNTER + uid, 20, 3600))
             return "发文频繁, 请稍后再试";
-        String sensitiveHit = sensitiveCheck(vo.getTitle() + " " + vo.getContent().toJSONString());
-        if (sensitiveHit != null)
-            return "内容包含违禁词汇【" + sensitiveHit + "】，请修改后再发布";
+        String forbiddenHit = forbiddenCheck(vo.getTitle() + " " + vo.getContent().toJSONString());
+        if (forbiddenHit != null)
+            return "内容包含违禁词汇【" + forbiddenHit + "】，请修改后再发布";
         TopicDTO dto = new TopicDTO(0, vo.getTitle(), vo.getContent().toJSONString(), vo.getType(), new Date(), uid, 0,
                 "approved", 0);
         if (this.save(dto)) {
@@ -116,6 +117,9 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "文章字数过多, 请稍后再试";
         if (vo.getType() != 0 && !types.contains(vo.getType()))
             return "文章类型非法！";
+        String forbiddenHit = forbiddenCheck(vo.getTitle() + " " + vo.getContent().toJSONString());
+        if (forbiddenHit != null)
+            return "内容包含违禁词汇【" + forbiddenHit + "】，请修改后再发布";
         baseMapper.update(null, Wrappers.<TopicDTO>update()
                 .eq("uid", uid)
                 .eq("id", vo.getId())
@@ -132,23 +136,32 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "发表评论频繁, 请稍后再试";
         if (!textLimitCheck(JSONObject.parseObject(vo.getContent()), 2000))
             return "评论内容字数过多, 请重新编辑";
-        String sensitiveHit = sensitiveCheck(vo.getContent());
-        if (sensitiveHit != null)
-            return "评论包含违禁词汇【" + sensitiveHit + "】，请修改后再提交";
+        String forbiddenHit = forbiddenCheck(vo.getContent());
+        if (forbiddenHit != null)
+            return "评论包含违禁词汇【" + forbiddenHit + "】，请修改后再提交";
+        TopicDTO topicDTO = baseMapper.selectById(vo.getTid());
+        if (topicDTO == null)
+            return "帖子不存在";
+        AccountDTO accountDTO = accountMapper.selectById(uid);
+        if (accountDTO == null)
+            return "用户不存在";
+        TopicCommentDTO quoteComment = null;
+        if (vo.getQuote() > 0) {
+            quoteComment = commentMapper.selectById(vo.getQuote());
+            if (quoteComment == null)
+                return "被回复的评论不存在";
+        }
         TopicCommentDTO dto = new TopicCommentDTO();
         dto.setUid(uid);
         BeanUtils.copyProperties(vo, dto);
         dto.setTime(new Date());
         commentMapper.insert(dto);
         cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
-        TopicDTO topicDTO = baseMapper.selectById(vo.getTid());
-        AccountDTO accountDTO = accountMapper.selectById(uid);
         if (vo.getQuote() > 0) {
-            TopicCommentDTO commentDTO = commentMapper.selectById(vo.getQuote());
-            if (!Objects.equals(accountDTO.getId(), commentDTO.getUid())) {
-                notificationService.addNotification(commentDTO.getUid(), "您有新的评论回复",
+            if (!Objects.equals(accountDTO.getId(), quoteComment.getUid())) {
+                notificationService.addNotification(quoteComment.getUid(), "您有新的评论回复",
                         accountDTO.getUsername() + "回复了你发表的评论", "success",
-                        "/home/topic/" + commentDTO.getTid());
+                        "/home/topic/" + quoteComment.getTid());
             }
         } else if (!Objects.equals(accountDTO.getId(), topicDTO.getUid())) {
             notificationService.addNotification(topicDTO.getUid(), "您有新的帖子评论回复",
@@ -158,26 +171,11 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         return null;
     }
 
-    /**
-     * 精确匹配敏感词检测（大小写不敏感）
-     */
-    private String sensitiveCheck(String text) {
-        if (text == null || text.isBlank()) return null;
-        List<SensitiveWordDTO> words = safeLoadSensitiveWords();
-        String lowerText = text.toLowerCase();
-        for (SensitiveWordDTO sw : words) {
-            if (sw.getWord() != null && lowerText.contains(sw.getWord().toLowerCase())) {
-                return sw.getWord();
-            }
-        }
-        return null;
-    }
-
-    private List<SensitiveWordDTO> safeLoadSensitiveWords() {
+    private String forbiddenCheck(String text) {
         try {
-            return sensitiveWordMapper.selectList(null);
+            return contentFilter.checkForbiddenWords(text);
         } catch (Exception e) {
-            return List.of();
+            return null;
         }
     }
 
@@ -332,13 +330,16 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         TopicDTO dto = baseMapper.selectById(tid);
         if (dto == null) return null;
         BeanUtils.copyProperties(dto, vo);
+        vo.setRawContent(dto.getContent());
         try {
             JSONObject content = JSONObject.parseObject(dto.getContent());
             vo.setTags(content.getList("tags", String.class));
-            // 直接返回原始内容 JSON 字符串，让前端负责富文本/图片的渲染
-            vo.setContent(dto.getContent());
+            List<String> images = new LinkedList<>();
+            vo.setContent(extractDisplayText(content, images));
+            vo.setImages(images);
         } catch (Exception e) {
             vo.setContent(dto.getContent());
+            vo.setImages(List.of());
         }
         TopicDetailVO.User user = new TopicDetailVO.User();
         TopicDetailVO.Interact interact = new TopicDetailVO.Interact(
@@ -489,7 +490,16 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         return vo;
     }
 
+    private String extractDisplayText(JSONObject content, List<String> images) {
+        String md = content.getString("md");
+        if (md != null) return md;
+        StringBuilder previewText = new StringBuilder();
+        shortContent(content.getJSONArray("ops"), previewText, obj -> images.add(obj.toString()));
+        return previewText.toString();
+    }
+
     private void shortContent(JSONArray ops, StringBuilder previewText, Consumer<Object> imagesHandler) {
+        if (ops == null) return;
         for (Object op : ops) {
             Object insert = JSONObject.from(op).get("insert");
             if (insert instanceof String text) {

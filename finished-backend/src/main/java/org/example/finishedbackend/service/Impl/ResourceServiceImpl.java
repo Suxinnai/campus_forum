@@ -40,11 +40,11 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
     @Override
     public String uploadResource(MultipartFile file, String title, String category,
             String description, int uploaderId) {
-        String originalFilename = file.getOriginalFilename();
+        String originalFilename = safeOriginalFilename(file.getOriginalFilename());
         String relativePath = "/resource/" + format.format(new Date()) + "/"
                 + UUID.randomUUID().toString().replace("-", "") + "_" + originalFilename;
         try {
-            Path target = Paths.get(storagePath + relativePath);
+            Path target = resolveStoragePath(relativePath);
             Files.createDirectories(target.getParent());
             file.transferTo(target);
 
@@ -102,7 +102,7 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
         this.update(Wrappers.<ResourceDTO>update()
                 .setSql("download_count = download_count + 1")
                 .eq("id", id));
-        Path path = Paths.get(storagePath + dto.getFileUrl());
+        Path path = resolveStoragePath(dto.getFileUrl());
         Files.copy(path, stream);
         return dto;
     }
@@ -144,11 +144,36 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
         if (dto.getUploaderId() != uid && !isAdmin) return false;
         this.removeById(rid);
         try {
-            Path path = Paths.get(storagePath + dto.getFileUrl());
+            Path path = resolveStoragePath(dto.getFileUrl());
             Files.deleteIfExists(path);
         } catch (Exception e) {
             log.warn("删除资源文件失败：{}", e.getMessage());
         }
         return true;
+    }
+
+    private String safeOriginalFilename(String originalFilename) {
+        if (originalFilename == null || originalFilename.isBlank()) {
+            return "resource";
+        }
+        return Paths.get(originalFilename)
+                .getFileName()
+                .toString()
+                .replace("\\", "_")
+                .replace("/", "_")
+                .replaceAll("[\\r\\n\\t]", "_");
+    }
+
+    private Path resolveStoragePath(String relativePath) {
+        Path root = Paths.get(storagePath).toAbsolutePath().normalize();
+        String cleanRelativePath = relativePath == null ? "" : relativePath.replace("\\", "/");
+        while (cleanRelativePath.startsWith("/")) {
+            cleanRelativePath = cleanRelativePath.substring(1);
+        }
+        Path target = root.resolve(cleanRelativePath).normalize();
+        if (!target.startsWith(root)) {
+            throw new SecurityException("非法文件路径");
+        }
+        return target;
     }
 }

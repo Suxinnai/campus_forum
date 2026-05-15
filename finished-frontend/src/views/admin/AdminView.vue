@@ -15,6 +15,8 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart, PieChart } from 'echarts/charts'
 import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
+import { createLineChartOption, createPieChartOption } from './admin-chart-options.js'
+import { formatFileSize, formatTime, toDateInputValue } from './admin-formatters.js'
 
 use([CanvasRenderer, LineChart, PieChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
 
@@ -29,59 +31,8 @@ const canManageTopics = computed(() => isAdmin.value || isContentAdmin.value || 
 const activeTab = ref('topics')
 const stats = reactive({ users: 0, topics: 0, comments: 0, todayPosts: 0, sensitiveWords: 0, todayRegistered: 0, todayActive: 0, hotTopics: [], dailyPosts: [], categoryDistribution: [] })
 
-const lineChartOption = computed(() => {
-  const dates = stats.dailyPosts?.map(d => d.date.slice(5)) || []
-  const counts = stats.dailyPosts?.map(d => d.count) || []
-  return {
-    tooltip: { trigger: 'axis', backgroundColor: 'rgba(255,255,255,0.95)', borderColor: '#e2e8f0', textStyle: { color: '#334155' } },
-    grid: { left: '2%', right: '4%', bottom: '2%', top: '10%', containLabel: true },
-    xAxis: { type: 'category', boundaryGap: false, data: dates, axisLine: { lineStyle: { color: '#cbd5e1' } }, axisLabel: { color: '#64748b' } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } }, axisLabel: { color: '#64748b' } },
-    series: [
-      {
-        name: '发帖量',
-        type: 'line',
-        smooth: true,
-        data: counts,
-        itemStyle: { color: '#0ea5e9' },
-        lineStyle: { width: 3, shadowColor: 'rgba(14,165,233,0.3)', shadowBlur: 8, shadowOffsetY: 4 },
-        areaStyle: {
-          color: {
-            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [{ offset: 0, color: 'rgba(14,165,233,0.2)' }, { offset: 1, color: 'rgba(14,165,233,0)' }]
-          }
-        }
-      }
-    ]
-  }
-})
-
-const pieChartOption = computed(() => {
-  // 使用后端返回的真实分类统计数据
-  const data = stats.categoryDistribution?.length
-    ? stats.categoryDistribution
-    : [{ name: '暂无数据', value: 1 }]
-
-  return {
-    tooltip: { trigger: 'item', backgroundColor: 'rgba(255,255,255,0.95)', borderColor: '#e2e8f0', textStyle: { color: '#334155' }, formatter: '{b}: {c}篇 ({d}%)' },
-    legend: { bottom: '0%', left: 'center', itemWidth: 8, itemHeight: 8, icon: 'circle', textStyle: { color: '#64748b', fontSize: 12 } },
-    series: [
-      {
-        name: '内容分类占比',
-        type: 'pie',
-        radius: ['45%', '70%'],
-        center: ['50%', '42%'],
-        avoidLabelOverlap: false,
-        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
-        label: { show: false, position: 'center' },
-        emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold', color: '#0ea5e9' } },
-        labelLine: { show: false },
-        data: data,
-        color: ['#0ea5e9', '#14b8a6', '#38bdf8', '#f59e0b', '#2dd4bf', '#7dd3fc', '#a78bfa']
-      }
-    ]
-  }
-})
+const lineChartOption = computed(() => createLineChartOption(stats.dailyPosts || []))
+const pieChartOption = computed(() => createPieChartOption(stats.categoryDistribution || []))
 
 // 用户管理
 const users = ref([])
@@ -133,6 +84,7 @@ const feedbackLoading = ref(false)
 // 敏感词管理
 const sensitiveWords = ref([])
 const newWord = ref('')
+const newWordType = ref('sensitive')
 
 // 版块类型
 const topicTypes = ref([])
@@ -471,17 +423,6 @@ function deleteActivity(id) {
 }
 
 // ===== 校历日程管理（独立于活动）=====
-function toDateInputValue(value) {
-  if (!value) return ''
-  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 function openAddSchedule() {
   scheduleEditMode.value = false
   Object.assign(scheduleForm, { id: null, title: '', description: '', eventDate: '', endDate: '', type: 'semester' })
@@ -578,9 +519,10 @@ function deleteFeedback(id) {
 // 敏感词管理
 function addWord() {
   if (!newWord.value.trim()) return
-  post(`/api/admin/sensitive-word/add?word=${encodeURIComponent(newWord.value.trim())}`, {}, () => {
+  post(`/api/admin/sensitive-word/add?word=${encodeURIComponent(newWord.value.trim())}&type=${newWordType.value}`, {}, () => {
     ElMessage.success('添加成功')
     newWord.value = ''
+    newWordType.value = 'sensitive'
     loadSensitiveWords()
     loadStats()
   })
@@ -596,19 +538,6 @@ function deleteWord(id, word) {
       loadStats()
     })
   }).catch(() => {})
-}
-
-// ===================== 工具函数 =====================
-function formatTime(t) {
-  if (!t) return '-'
-  return new Date(t).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-function formatFileSize(bytes) {
-  if (!bytes) return '0 B'
-  const k = 1024, sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
 function switchTab(tab) {
@@ -1117,11 +1046,16 @@ onMounted(() => {
             </div>
             <div class="word-input-row">
               <input v-model="newWord" placeholder="输入要添加的敏感词..." @keyup.enter="addWord" maxlength="50" class="word-input" />
+              <select v-model="newWordType" class="word-type-select" aria-label="敏感词类型">
+                <option value="sensitive">替换</option>
+                <option value="forbidden">拦截</option>
+              </select>
               <button class="tbtn primary" @click="addWord"><Plus :size="13" /> 添加</button>
             </div>
             <div class="word-list" v-if="sensitiveWords.length">
-              <div v-for="w in sensitiveWords" :key="w.id" class="word-chip">
+              <div v-for="w in sensitiveWords" :key="w.id" class="word-chip" :class="w.type === 'forbidden' ? 'forbidden' : 'sensitive'">
                 <span>{{ w.word }}</span>
+                <small>{{ w.type === 'forbidden' ? '拦截' : '替换' }}</small>
                 <button class="word-x" @click="deleteWord(w.id, w.word)"><X :size="10" /></button>
               </div>
             </div>
@@ -2160,8 +2094,11 @@ onMounted(() => {
 // Sensitive Words
 .word-input-row { display: flex; align-items: center; gap: 12px; padding: 20px 24px; border-bottom: 1px solid rgba(0,0,0,0.04); }
 .word-input { flex: 1; height: 40px; padding: 0 16px; border: 1px solid var(--el-border-color); border-radius: 10px; font-size: 14px; font-weight: 500; outline: none; transition: all 0.3s; &:focus { border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,0.1); } }
+.word-type-select { height: 40px; padding: 0 12px; border: 1px solid var(--el-border-color); border-radius: 10px; background: var(--el-bg-color); color: var(--el-text-color-primary); font-size: 13px; font-weight: 700; outline: none; }
 .word-list { display: flex; flex-wrap: wrap; gap: 10px; padding: 24px; }
-.word-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 20px; font-size: 14px; font-weight: 700; color: #dc2626; box-shadow: 0 2px 8px rgba(220,38,38,0.1); }
+.word-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 14px; border-radius: 20px; font-size: 14px; font-weight: 700; box-shadow: 0 2px 8px rgba(220,38,38,0.1); small { padding: 1px 6px; border-radius: 999px; font-size: 11px; background: rgba(255,255,255,0.7); } }
+.word-chip.sensitive { background: #eff6ff; border: 1px solid #bfdbfe; color: #2563eb; box-shadow: 0 2px 8px rgba(37,99,235,0.1); }
+.word-chip.forbidden { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
 .word-x { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #fecaca; border: none; color: #dc2626; cursor: pointer; transition: all 0.2s; &:hover { background: #dc2626; color: #fff; transform: scale(1.1); } }
 
 // ─── Admin Modals — Professional, Clean, Functional ─────

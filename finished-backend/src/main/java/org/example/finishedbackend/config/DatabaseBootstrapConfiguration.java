@@ -15,10 +15,13 @@ public class DatabaseBootstrapConfiguration {
                     CREATE TABLE IF NOT EXISTS db_sensitive_word (
                         id INT PRIMARY KEY AUTO_INCREMENT,
                         word VARCHAR(50) NOT NULL UNIQUE COMMENT '敏感词（唯一）',
+                        type VARCHAR(20) NOT NULL DEFAULT 'sensitive' COMMENT '词类型: sensitive/forbidden',
                         INDEX idx_word (word)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                     """);
 
+            ensureColumn(jdbcTemplate, "db_sensitive_word", "type",
+                    "ALTER TABLE db_sensitive_word ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'sensitive' COMMENT '词类型: sensitive/forbidden'");
             ensureColumn(jdbcTemplate, "db_topic_comment", "like_count",
                     "ALTER TABLE db_topic_comment ADD COLUMN like_count INT NOT NULL DEFAULT 0");
             ensureColumn(jdbcTemplate, "db_topic_comment", "hot_score",

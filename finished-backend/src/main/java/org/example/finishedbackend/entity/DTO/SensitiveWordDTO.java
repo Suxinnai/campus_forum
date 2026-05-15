@@ -11,4 +11,5 @@ public class SensitiveWordDTO {
     @TableId(type = IdType.AUTO)
     Integer id;
     String word;
+    String type;
 }
