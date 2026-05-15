@@ -5,6 +5,29 @@
 -- =====================================================
 USE campus_forum;
 
+DROP PROCEDURE IF EXISTS add_column_if_missing;
+DELIMITER //
+CREATE PROCEDURE add_column_if_missing(
+    IN p_table_name VARCHAR(64),
+    IN p_column_name VARCHAR(64),
+    IN p_column_definition TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = p_table_name
+          AND COLUMN_NAME = p_column_name
+    ) THEN
+        SET @ddl = CONCAT('ALTER TABLE `', p_table_name, '` ADD COLUMN `', p_column_name, '` ', p_column_definition);
+        PREPARE stmt FROM @ddl;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END//
+DELIMITER ;
+
 -- 创建用户反馈表（如果不存在）
 CREATE TABLE IF NOT EXISTS db_feedback (
     id          INT PRIMARY KEY AUTO_INCREMENT,
@@ -43,12 +66,20 @@ SELECT * FROM (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM db_schedule LIMIT 1);
 
 -- 确保帖子表有 top, featured, status 字段
-ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `top`      TINYINT(1)  NOT NULL DEFAULT 0    COMMENT '是否置顶 1=置顶 0=普通';
-ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `status`   VARCHAR(20) NOT NULL DEFAULT 'approved' COMMENT '审核状态: pending/approved/rejected';
-ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `featured` TINYINT(1)  NOT NULL DEFAULT 0    COMMENT '是否精华 1=精华 0=普通';
+CALL add_column_if_missing('db_topic', 'top', 'TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''是否置顶 1=置顶 0=普通''');
+CALL add_column_if_missing('db_topic', 'status', 'VARCHAR(20) NOT NULL DEFAULT ''approved'' COMMENT ''审核状态: pending/approved/rejected''');
+CALL add_column_if_missing('db_topic', 'featured', 'TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''是否精华 1=精华 0=普通''');
+
+-- 确保资源表有审核字段
+CALL add_column_if_missing('db_resource', 'status', 'VARCHAR(20) NOT NULL DEFAULT ''approved'' COMMENT ''审核状态: pending/approved/rejected''');
+CALL add_column_if_missing('db_resource', 'reject_reason', 'VARCHAR(255) DEFAULT NULL COMMENT ''驳回原因''');
+CALL add_column_if_missing('db_resource', 'auditor_id', 'INT DEFAULT NULL COMMENT ''审核人ID''');
+CALL add_column_if_missing('db_resource', 'audit_time', 'DATETIME DEFAULT NULL COMMENT ''审核时间''');
 
 -- 确保用户表有 banned, moderator_type 字段
-ALTER TABLE db_account ADD COLUMN IF NOT EXISTS `banned`         TINYINT(1) NOT NULL DEFAULT 0    COMMENT '是否封禁';
-ALTER TABLE db_account ADD COLUMN IF NOT EXISTS `moderator_type` INT        DEFAULT NULL          COMMENT '版主负责的版块ID';
+CALL add_column_if_missing('db_account', 'banned', 'TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''是否封禁''');
+CALL add_column_if_missing('db_account', 'moderator_type', 'INT DEFAULT NULL COMMENT ''版主负责的版块ID''');
+
+DROP PROCEDURE IF EXISTS add_column_if_missing;
 
 SELECT '✅ 管理后台数据库修复完成' AS result;

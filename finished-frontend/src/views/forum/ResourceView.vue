@@ -108,7 +108,7 @@ function submitUpload() {
     }
   }).then(res => {
     if (res.data.code === 200) {
-      ElMessage.success('资源上传成功！')
+      ElMessage.success(store.user.role === 'admin' ? '资源上传成功！' : '资源已提交审核')
       uploadDialogVisible.value = false
       currentPage.value = 1
       loadResources()

@@ -3,10 +3,12 @@ package org.example.finishedbackend.controller;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.example.finishedbackend.entity.DTO.AccountDTO;
 import org.example.finishedbackend.entity.DTO.ResourceDTO;
 import org.example.finishedbackend.entity.RestBean;
 import org.example.finishedbackend.entity.VO.response.ResourceListVO;
 import org.example.finishedbackend.entity.VO.response.ResourceVO;
+import org.example.finishedbackend.service.AccountService;
 import org.example.finishedbackend.service.ResourceService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,6 +24,9 @@ public class ResourceController {
 
     @Resource
     ResourceService resourceService;
+
+    @Resource
+    AccountService accountService;
 
     /**
      * 上传资源
@@ -58,14 +63,14 @@ public class ResourceController {
         try {
             log.info("用户 {} 正在下载资源 ID: {}", uid, id);
             ResourceDTO dto = resourceService.getById(id);
-            if (dto == null) {
+            if (dto == null || !canDownload(dto, uid)) {
                 response.setStatus(404);
                 return;
             }
             response.setContentType("application/octet-stream");
             response.setHeader("Content-Disposition",
                     "attachment;filename=" + URLEncoder.encode(dto.getFileName(), StandardCharsets.UTF_8));
-            resourceService.downloadResource(id, response.getOutputStream());
+            resourceService.downloadResource(id, uid, response.getOutputStream());
         } catch (Exception e) {
             log.error("资源下载失败：{}", e.getMessage());
             response.setStatus(500);
@@ -96,5 +101,12 @@ public class ResourceController {
             @RequestAttribute("id") int uid) {
         boolean ok = resourceService.deleteResource(id, uid);
         return ok ? RestBean.success(null) : RestBean.failure(403, "无权删除该资源");
+    }
+
+    private boolean canDownload(ResourceDTO dto, int uid) {
+        if ("approved".equals(dto.getStatus())) return true;
+        if (dto.getUploaderId() != null && dto.getUploaderId() == uid) return true;
+        AccountDTO account = accountService.findAccountById(uid);
+        return account != null && "admin".equals(account.getRole());
     }
 }

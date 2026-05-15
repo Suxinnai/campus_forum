@@ -93,6 +93,9 @@ public class ForumController {
             @RequestParam @Pattern(regexp = "(like|collect)") String type,
             @RequestParam boolean state,
             @RequestAttribute("id") int id) {
+        if (topic.resolvePreviewById(tid) == null) {
+            return RestBean.failure(404, "帖子不存在或尚未通过审核");
+        }
         topic.interact(new Interact(tid, id, new Date(), type), state);
         if (state) {
             recommendService.recordBehavior(id, tid, type);

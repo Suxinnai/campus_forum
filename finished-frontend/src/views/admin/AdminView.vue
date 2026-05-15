@@ -76,6 +76,9 @@ const scheduleForm = reactive({
 const resources = ref([])
 const resourcePage = ref(1)
 const resourceTotal = ref(0)
+const resourceStatusFilter = ref('all')
+const resourceSearch = ref('')
+const selectedResources = ref([])
 
 // 反馈管理
 const feedbacks = ref([])
@@ -84,7 +87,6 @@ const feedbackLoading = ref(false)
 // 敏感词管理
 const sensitiveWords = ref([])
 const newWord = ref('')
-const newWordType = ref('sensitive')
 
 // 版块类型
 const topicTypes = ref([])
@@ -184,9 +186,13 @@ function loadSchedules() {
 }
 
 function loadResources() {
-  get(`/api/admin/resources?page=${resourcePage.value - 1}`, data => {
+  let url = `/api/admin/resources?page=${resourcePage.value - 1}`
+  if (resourceStatusFilter.value && resourceStatusFilter.value !== 'all') url += `&status=${resourceStatusFilter.value}`
+  if (resourceSearch.value.trim()) url += `&keyword=${encodeURIComponent(resourceSearch.value.trim())}`
+  get(url, data => {
     resources.value = data.records || data
     resourceTotal.value = data.total || data.length
+    selectedResources.value = []
   })
 }
 
@@ -287,6 +293,12 @@ function auditTopic(topic, status) {
     topic.status = status
     ElMessage.success(status === 'approved' ? '已通过审核' : status === 'pending' ? '已设为待审核' : '已驳回')
   })
+}
+
+const auditStatusText = (status) => {
+  if (status === 'pending') return '待审核'
+  if (status === 'rejected') return '已驳回'
+  return '已通过'
 }
 
 function toggleFeatured(topic) {
@@ -486,6 +498,90 @@ const scheduleTypeMap = { semester: { label: '学期', color: '#059669', bg: '#D
 const getScheduleType = (type) => scheduleTypeMap[type] || scheduleTypeMap.event
 
 // 资源管理
+function auditResource(resource, status) {
+  if (status === 'rejected') {
+    ElMessageBox.prompt('填写驳回原因，便于后续追踪', '驳回资源', {
+      confirmButtonText: '确认驳回',
+      cancelButtonText: '取消',
+      inputPlaceholder: '例如：资源内容不完整或不符合共享规范',
+      inputValue: resource.rejectReason || ''
+    }).then(({ value }) => {
+      submitResourceAudit(resource, status, value || '')
+    }).catch(() => {})
+    return
+  }
+  submitResourceAudit(resource, status)
+}
+
+function submitResourceAudit(resource, status, reason = '') {
+  let url = `/api/admin/resource/status?id=${resource.id}&status=${status}`
+  if (reason.trim()) url += `&reason=${encodeURIComponent(reason.trim())}`
+  post(url, {}, () => {
+    resource.status = status
+    resource.rejectReason = status === 'rejected' ? (reason || '内容不符合资源共享规范') : null
+    ElMessage.success(status === 'approved' ? '资源已通过审核' : status === 'pending' ? '资源已设为待审核' : '资源已驳回')
+    loadResources()
+  })
+}
+
+function selectedResourceIds() {
+  return selectedResources.value.map(r => r.id).filter(Boolean)
+}
+
+function isResourceSelected(resource) {
+  return selectedResources.value.some(item => item.id === resource.id)
+}
+
+function toggleResourceSelection(resource, checked) {
+  if (checked) {
+    if (!isResourceSelected(resource)) selectedResources.value = [...selectedResources.value, resource]
+    return
+  }
+  selectedResources.value = selectedResources.value.filter(item => item.id !== resource.id)
+}
+
+function allVisibleResourcesSelected() {
+  return resources.value.length > 0 && resources.value.every(resource => isResourceSelected(resource))
+}
+
+function toggleAllVisibleResources(checked) {
+  selectedResources.value = checked ? [...resources.value] : []
+}
+
+function batchAuditResources(status) {
+  const ids = selectedResourceIds()
+  if (!ids.length) {
+    ElMessage.warning('请先选择资源')
+    return
+  }
+  if (status === 'rejected') {
+    ElMessageBox.prompt(`将 ${ids.length} 个资源驳回，请填写原因`, '批量驳回资源', {
+      confirmButtonText: '确认驳回',
+      cancelButtonText: '取消',
+      inputPlaceholder: '例如：资源内容不完整或不符合共享规范'
+    }).then(({ value }) => {
+      submitBatchResourceAudit(status, value || '')
+    }).catch(() => {})
+    return
+  }
+  submitBatchResourceAudit(status)
+}
+
+function submitBatchResourceAudit(status, reason = '') {
+  const ids = selectedResourceIds()
+  if (!ids.length) {
+    ElMessage.warning('请先选择资源')
+    return
+  }
+  let url = `/api/admin/resource/batch-status?status=${status}`
+  if (reason.trim()) url += `&reason=${encodeURIComponent(reason.trim())}`
+  post(url, ids, () => {
+    ElMessage.success(status === 'approved' ? '已批量通过资源' : status === 'pending' ? '已批量设为待审核' : '已批量驳回资源')
+    selectedResources.value = []
+    loadResources()
+  })
+}
+
 function deleteResource(id) {
   ElMessageBox.confirm('确定删除此资源文件吗？', '删除确认', {
     confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning'
@@ -495,6 +591,32 @@ function deleteResource(id) {
       loadResources()
     })
   }).catch(() => {})
+}
+
+function batchDeleteResources() {
+  const ids = selectedResourceIds()
+  if (!ids.length) {
+    ElMessage.warning('请先选择资源')
+    return
+  }
+  ElMessageBox.confirm(`确定删除选中的 ${ids.length} 个资源文件吗？`, '批量删除确认', {
+    confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning'
+  }).then(() => {
+    post('/api/admin/resource/batch-delete', ids, () => {
+      ElMessage.success('已批量删除资源')
+      selectedResources.value = []
+      loadResources()
+    })
+  }).catch(() => {})
+}
+
+function resourceFileMeta(row) {
+  if (row.fileName && row.description) return `${row.fileName} · ${row.description}`
+  return row.fileName || row.description || '无文件描述'
+}
+
+function resourceBatchLabel() {
+  return `已选 ${selectedResources.value.length} 项`
 }
 
 // 反馈管理
@@ -519,10 +641,9 @@ function deleteFeedback(id) {
 // 敏感词管理
 function addWord() {
   if (!newWord.value.trim()) return
-  post(`/api/admin/sensitive-word/add?word=${encodeURIComponent(newWord.value.trim())}&type=${newWordType.value}`, {}, () => {
+  post(`/api/admin/sensitive-word/add?word=${encodeURIComponent(newWord.value.trim())}`, {}, () => {
     ElMessage.success('添加成功')
     newWord.value = ''
-    newWordType.value = 'sensitive'
     loadSensitiveWords()
     loadStats()
   })
@@ -781,7 +902,7 @@ onMounted(() => {
           <div v-if="activeTab === 'topics'" class="panel">
             <div class="panel-toolbar">
               <div class="toolbar-left">
-                <span class="toolbar-hint">置顶/精华帖将在社区首页优先展示</span>
+                <span class="toolbar-hint">待审核和驳回帖子不会在社区前台展示</span>
               </div>
               <div class="toolbar-right">
                 <button v-if="selectedTopics.length" class="tbtn danger" @click="batchDeleteTopics">
@@ -817,8 +938,23 @@ onMounted(() => {
               <el-table-column label="审核" width="90" align="center">
                 <template #default="{ row }">
                   <span class="audit-badge" :class="row.status || 'approved'">
-                    {{ row.status === 'pending' ? '待审核' : row.status === 'rejected' ? '已驳回' : '已通过' }}
+                    {{ auditStatusText(row.status) }}
                   </span>
+                </template>
+              </el-table-column>
+              <el-table-column label="审核操作" width="142" align="center">
+                <template #default="{ row }">
+                  <div class="audit-actions">
+                    <button v-if="row.status !== 'approved'" class="tbtn-icon ok" @click="auditTopic(row, 'approved')" title="通过">
+                      <Check :size="13" />
+                    </button>
+                    <button v-if="row.status !== 'pending'" class="tbtn-icon warn" @click="auditTopic(row, 'pending')" title="设为待审核">
+                      <RotateCw :size="13" />
+                    </button>
+                    <button v-if="row.status !== 'rejected'" class="tbtn-icon danger" @click="auditTopic(row, 'rejected')" title="驳回">
+                      <X :size="13" />
+                    </button>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column label="精华" width="60" align="center">
@@ -835,10 +971,11 @@ onMounted(() => {
                   </button>
                 </template>
               </el-table-column>
-              <el-table-column label="" width="60" align="center">
+              <el-table-column label="删除" width="86" align="center">
                 <template #default="{ row }">
-                  <button class="icon-toggle delete" @click="deleteTopic(row.id)" title="删除">
-                    <Trash2 :size="14" />
+                  <button class="tbtn sm danger row-delete-btn" @click="deleteTopic(row.id)" title="删除帖子">
+                    <Trash2 :size="12" />
+                    删除
                   </button>
                 </template>
               </el-table-column>
@@ -974,26 +1111,91 @@ onMounted(() => {
           <div v-if="isAdmin && activeTab === 'resources'" class="panel">
             <div class="panel-toolbar">
               <div class="toolbar-left">
-                <span class="toolbar-hint">可删除违规或失效的共享文件</span>
+                <div class="search-box">
+                  <Search :size="14" class="s-icon" />
+                  <input v-model="resourceSearch" placeholder="搜索标题、文件名或描述..." @keyup.enter="resourcePage = 1; loadResources()" />
+                </div>
+                <el-select v-model="resourceStatusFilter" size="small" style="width:128px" placeholder="全部状态" @change="resourcePage = 1; loadResources()">
+                  <el-option label="全部状态" value="all" />
+                  <el-option label="待审核" value="pending" />
+                  <el-option label="已通过" value="approved" />
+                  <el-option label="已驳回" value="rejected" />
+                </el-select>
+              </div>
+              <div class="toolbar-right">
+                <div v-if="selectedResources.length" class="batch-actions">
+                  <span class="selection-count">{{ resourceBatchLabel() }}</span>
+                  <button class="tbtn sm ok" @click="batchAuditResources('approved')">
+                    <Check :size="12" /> 通过
+                  </button>
+                  <button class="tbtn sm warn" @click="batchAuditResources('pending')">
+                    <RotateCw :size="12" /> 待审
+                  </button>
+                  <button class="tbtn sm danger" @click="batchAuditResources('rejected')">
+                    <X :size="12" /> 驳回
+                  </button>
+                  <button class="tbtn sm danger" @click="batchDeleteResources">
+                    <Trash2 :size="12" /> 删除
+                  </button>
+                </div>
+                <button class="tbtn sm" @click="resourcePage = 1; loadResources()">
+                  <RotateCw :size="12" /> 刷新
+                </button>
               </div>
             </div>
-            <el-table :data="resources" style="width:100%" class="admin-table">
-              <el-table-column label="ID" prop="id" width="60" />
-              <el-table-column label="资源标题" prop="title" min-width="220" show-overflow-tooltip />
-              <el-table-column label="分类" prop="category" width="100" />
-              <el-table-column label="大小" width="100">
-                <template #default="{ row }">{{ formatFileSize(row.fileSize) }}</template>
-              </el-table-column>
-              <el-table-column label="上传时间" width="155">
-                <template #default="{ row }">{{ formatTime(row.createTime) }}</template>
-              </el-table-column>
-              <el-table-column label="下载" prop="downloadCount" width="70" align="center" />
-              <el-table-column label="操作" width="60" align="center">
-                <template #default="{ row }">
-                  <button class="tbtn-icon danger" @click="deleteResource(row.id)"><Trash2 :size="13" /></button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div v-if="resources.length" class="resource-audit-list">
+              <div class="resource-list-head">
+                <label class="resource-select-all">
+                  <input type="checkbox" :checked="allVisibleResourcesSelected()" @change="toggleAllVisibleResources($event.target.checked)" />
+                  <span>本页全选</span>
+                </label>
+                <span>共 {{ resourceTotal }} 个资源</span>
+              </div>
+              <div v-for="row in resources" :key="row.id" class="resource-audit-item" :class="{ selected: isResourceSelected(row) }">
+                <label class="resource-check">
+                  <input type="checkbox" :checked="isResourceSelected(row)" @change="toggleResourceSelection(row, $event.target.checked)" />
+                </label>
+                <div class="resource-card-main">
+                  <div class="resource-card-top">
+                    <div class="resource-title-group">
+                      <span class="resource-id">#{{ row.id }}</span>
+                      <h3>{{ row.title }}</h3>
+                    </div>
+                  </div>
+                  <div class="resource-file-line">{{ resourceFileMeta(row) }}</div>
+                  <div class="resource-meta">
+                    <span>上传者：{{ row.uploaderName || '-' }}</span>
+                    <span>{{ row.category || '未分类' }}</span>
+                    <span>{{ formatFileSize(row.fileSize) }}</span>
+                    <span>{{ row.downloadCount || 0 }} 次下载</span>
+                    <span>{{ formatTime(row.createTime) }}</span>
+                  </div>
+                  <div v-if="row.rejectReason" class="resource-reject-note">{{ row.rejectReason }}</div>
+                </div>
+                <div class="resource-card-side">
+                  <span class="audit-badge" :class="row.status || 'approved'">{{ auditStatusText(row.status) }}</span>
+                  <div class="resource-actions">
+                    <button v-if="row.status !== 'approved'" class="tbtn sm ok audit-text-btn" @click="auditResource(row, 'approved')" title="通过">
+                      <Check :size="12" />
+                      通过
+                    </button>
+                    <button v-if="row.status !== 'pending'" class="tbtn sm warn audit-text-btn" @click="auditResource(row, 'pending')" title="设为待审核">
+                      <RotateCw :size="12" />
+                      待审
+                    </button>
+                    <button v-if="row.status !== 'rejected'" class="tbtn sm danger audit-text-btn" @click="auditResource(row, 'rejected')" title="驳回">
+                      <X :size="12" />
+                      驳回
+                    </button>
+                    <button class="tbtn sm danger audit-text-btn" @click="deleteResource(row.id)" title="删除资源">
+                      <Trash2 :size="12" />
+                      删除
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="暂无资源" style="padding:40px 0" />
             <div class="table-pagination">
               <el-pagination background layout="prev, pager, next" v-model:current-page="resourcePage" @current-change="loadResources" :total="resourceTotal" :page-size="15" hide-on-single-page />
             </div>
@@ -1041,21 +1243,16 @@ onMounted(() => {
           <div v-if="isAdmin && activeTab === 'sensitive'" class="panel">
             <div class="panel-toolbar">
               <div class="toolbar-left">
-                <span class="toolbar-hint">发帖/评论时自动拦截含有这些词的内容</span>
+                <span class="toolbar-hint">维护内容过滤词条</span>
               </div>
             </div>
             <div class="word-input-row">
               <input v-model="newWord" placeholder="输入要添加的敏感词..." @keyup.enter="addWord" maxlength="50" class="word-input" />
-              <select v-model="newWordType" class="word-type-select" aria-label="敏感词类型">
-                <option value="sensitive">替换</option>
-                <option value="forbidden">拦截</option>
-              </select>
               <button class="tbtn primary" @click="addWord"><Plus :size="13" /> 添加</button>
             </div>
             <div class="word-list" v-if="sensitiveWords.length">
-              <div v-for="w in sensitiveWords" :key="w.id" class="word-chip" :class="w.type === 'forbidden' ? 'forbidden' : 'sensitive'">
+              <div v-for="w in sensitiveWords" :key="w.id" class="word-chip">
                 <span>{{ w.word }}</span>
-                <small>{{ w.type === 'forbidden' ? '拦截' : '替换' }}</small>
                 <button class="word-x" @click="deleteWord(w.id, w.word)"><X :size="10" /></button>
               </div>
             </div>
@@ -1655,6 +1852,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .toolbar-hint {
@@ -1666,6 +1864,7 @@ onMounted(() => {
 .tbtn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 8px 16px;
   border: none;
@@ -1674,6 +1873,7 @@ onMounted(() => {
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
 
   &.primary { 
     background: linear-gradient(135deg, #0ea5e9, #0284c7);
@@ -1718,6 +1918,16 @@ onMounted(() => {
     &:hover { background: #dc2626; color: #fff; border-color: #dc2626; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(220,38,38,0.2); }
     html.dark & { border-color: rgba(220,38,38,0.4); background: rgba(220,38,38,0.1); }
   }
+  &.ok {
+    border-color: #bbf7d0; color: #15803d;
+    &:hover { background: #059669; color: #fff; border-color: #059669; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(5,150,105,0.18); }
+    html.dark & { border-color: rgba(5,150,105,0.4); background: rgba(5,150,105,0.1); }
+  }
+  &.warn {
+    border-color: #fde68a; color: #b45309;
+    &:hover { background: #d97706; color: #fff; border-color: #d97706; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(217,119,6,0.18); }
+    html.dark & { border-color: rgba(217,119,6,0.4); background: rgba(217,119,6,0.1); }
+  }
   &.edit { 
     border-color: var(--el-border-color); color: var(--el-text-color-secondary); 
     &:hover { border-color: #0ea5e9; color: #0ea5e9; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(14,165,233,0.1); } 
@@ -1755,6 +1965,53 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.audit-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.batch-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.selection-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--el-text-color-secondary);
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  html.dark & { background: #2a2a32; }
+}
+
+.row-delete-btn {
+  padding: 6px 10px !important;
+}
+
+.resource-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  width: 190px;
+}
+
+.audit-text-btn {
+  min-width: 54px;
+  height: 30px !important;
+  padding: 0 8px !important;
+  border-radius: 8px !important;
 }
 
 .muted { font-size: 13px; color: var(--el-text-color-placeholder); font-style: italic; }
@@ -1800,6 +2057,158 @@ onMounted(() => {
   font-weight: 600;
   color: #1e293b;
   html.dark & { color: #e2e8f0; }
+}
+
+.resource-audit-list {
+  padding: 14px 18px 18px;
+}
+
+.resource-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--el-text-color-secondary);
+}
+
+.resource-select-all,
+.resource-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+
+  input {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #0ea5e9;
+  }
+}
+
+.resource-audit-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 310px;
+  align-items: center;
+  column-gap: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+
+  & + .resource-audit-item {
+    margin-top: 10px;
+  }
+
+  &:hover {
+    border-color: rgba(14, 165, 233, 0.32);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  &.selected {
+    border-color: rgba(14, 165, 233, 0.45);
+    background: rgba(14, 165, 233, 0.04);
+  }
+}
+
+.resource-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.resource-card-top {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.resource-card-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20px;
+  min-width: 0;
+
+  .audit-badge {
+    min-width: 74px;
+    text-align: center;
+  }
+}
+
+.resource-title-group {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+
+  h3 {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.35;
+    font-weight: 800;
+    color: var(--el-text-color-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.resource-id {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: #94a3b8;
+}
+
+.resource-file-line {
+  max-width: 680px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-regular);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
+}
+
+.resource-reject-note {
+  margin-top: 9px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 1180px) {
+  .resource-audit-item {
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: flex-start;
+  }
+
+  .resource-card-side {
+    grid-column: 2;
+    justify-content: space-between;
+    margin-top: 12px;
+  }
 }
 
 .cell-author {
@@ -2094,11 +2503,8 @@ onMounted(() => {
 // Sensitive Words
 .word-input-row { display: flex; align-items: center; gap: 12px; padding: 20px 24px; border-bottom: 1px solid rgba(0,0,0,0.04); }
 .word-input { flex: 1; height: 40px; padding: 0 16px; border: 1px solid var(--el-border-color); border-radius: 10px; font-size: 14px; font-weight: 500; outline: none; transition: all 0.3s; &:focus { border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,0.1); } }
-.word-type-select { height: 40px; padding: 0 12px; border: 1px solid var(--el-border-color); border-radius: 10px; background: var(--el-bg-color); color: var(--el-text-color-primary); font-size: 13px; font-weight: 700; outline: none; }
 .word-list { display: flex; flex-wrap: wrap; gap: 10px; padding: 24px; }
-.word-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 14px; border-radius: 20px; font-size: 14px; font-weight: 700; box-shadow: 0 2px 8px rgba(220,38,38,0.1); small { padding: 1px 6px; border-radius: 999px; font-size: 11px; background: rgba(255,255,255,0.7); } }
-.word-chip.sensitive { background: #eff6ff; border: 1px solid #bfdbfe; color: #2563eb; box-shadow: 0 2px 8px rgba(37,99,235,0.1); }
-.word-chip.forbidden { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+.word-chip { display: flex; align-items: center; gap: 8px; padding: 7px 10px 7px 14px; border-radius: 20px; font-size: 14px; font-weight: 700; background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; box-shadow: 0 2px 8px rgba(220,38,38,0.08); }
 .word-x { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #fecaca; border: none; color: #dc2626; cursor: pointer; transition: all 0.2s; &:hover { background: #dc2626; color: #fff; transform: scale(1.1); } }
 
 // ─── Admin Modals — Professional, Clean, Functional ─────

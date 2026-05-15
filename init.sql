@@ -174,9 +174,14 @@ CREATE TABLE IF NOT EXISTS db_resource (
     uploader_id    INT          NOT NULL COMMENT '上传者ID',
     download_count INT          DEFAULT 0 COMMENT '下载次数',
     description    VARCHAR(500) DEFAULT NULL COMMENT '资源描述',
+    status         VARCHAR(20)  NOT NULL DEFAULT 'approved' COMMENT '审核状态: pending/approved/rejected',
+    reject_reason  VARCHAR(255) DEFAULT NULL COMMENT '驳回原因',
+    auditor_id     INT          DEFAULT NULL COMMENT '审核人ID',
+    audit_time     DATETIME     DEFAULT NULL COMMENT '审核时间',
     create_time    DATETIME     NOT NULL DEFAULT NOW(),
     INDEX idx_uploader (uploader_id),
     INDEX idx_category (category),
+    INDEX idx_resource_status (status),
     FOREIGN KEY (uploader_id) REFERENCES db_account(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -367,26 +372,59 @@ CREATE TABLE IF NOT EXISTS db_feedback (
 -- ---------------------------------------------------
 -- 22. 置顶字段补丁
 -- ---------------------------------------------------
-ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `top` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否置顶 1=置顶 0=普通';
+DROP PROCEDURE IF EXISTS add_column_if_missing;
+DELIMITER //
+CREATE PROCEDURE add_column_if_missing(
+    IN p_table_name VARCHAR(64),
+    IN p_column_name VARCHAR(64),
+    IN p_column_definition TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = p_table_name
+          AND COLUMN_NAME = p_column_name
+    ) THEN
+        SET @ddl = CONCAT('ALTER TABLE `', p_table_name, '` ADD COLUMN `', p_column_name, '` ', p_column_definition);
+        PREPARE stmt FROM @ddl;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END//
+DELIMITER ;
+
+CALL add_column_if_missing('db_topic', 'top', 'TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''是否置顶 1=置顶 0=普通''');
 
 -- ---------------------------------------------------
 -- 23. 用户封禁字段补丁
 -- ---------------------------------------------------
-ALTER TABLE db_account ADD COLUMN IF NOT EXISTS `banned` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否封禁 1=封禁 0=正常';
+CALL add_column_if_missing('db_account', 'banned', 'TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''是否封禁 1=封禁 0=正常''');
 
 -- ---------------------------------------------------
 -- 24. 帖子审核与精华字段补丁
 -- ---------------------------------------------------
-ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `status` VARCHAR(20) NOT NULL DEFAULT 'approved' COMMENT '审核状态: pending/approved/rejected';
-ALTER TABLE db_topic ADD COLUMN IF NOT EXISTS `featured` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否精华 1=精华 0=普通';
+CALL add_column_if_missing('db_topic', 'status', 'VARCHAR(20) NOT NULL DEFAULT ''approved'' COMMENT ''审核状态: pending/approved/rejected''');
+CALL add_column_if_missing('db_topic', 'featured', 'TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''是否精华 1=精华 0=普通''');
 
 -- ---------------------------------------------------
--- 25. 版主版块字段补丁
+-- 25. 资源审核字段补丁
 -- ---------------------------------------------------
-ALTER TABLE db_account ADD COLUMN IF NOT EXISTS `moderator_type` INT DEFAULT NULL COMMENT '版主负责的版块ID';
+CALL add_column_if_missing('db_resource', 'status', 'VARCHAR(20) NOT NULL DEFAULT ''approved'' COMMENT ''审核状态: pending/approved/rejected''');
+CALL add_column_if_missing('db_resource', 'reject_reason', 'VARCHAR(255) DEFAULT NULL COMMENT ''驳回原因''');
+CALL add_column_if_missing('db_resource', 'auditor_id', 'INT DEFAULT NULL COMMENT ''审核人ID''');
+CALL add_column_if_missing('db_resource', 'audit_time', 'DATETIME DEFAULT NULL COMMENT ''审核时间''');
 
 -- ---------------------------------------------------
--- 26. 校历日程表 (db_schedule) 【新增】
+-- 26. 版主版块字段补丁
+-- ---------------------------------------------------
+CALL add_column_if_missing('db_account', 'moderator_type', 'INT DEFAULT NULL COMMENT ''版主负责的版块ID''');
+
+DROP PROCEDURE IF EXISTS add_column_if_missing;
+
+-- ---------------------------------------------------
+-- 27. 校历日程表 (db_schedule) 【新增】
 -- 管理学期安排、假期、考试等校历事件
 -- ---------------------------------------------------
 CREATE TABLE IF NOT EXISTS db_schedule (

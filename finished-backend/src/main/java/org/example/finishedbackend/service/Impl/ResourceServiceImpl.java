@@ -29,6 +29,9 @@ import java.util.UUID;
 @Service
 public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO> implements ResourceService {
 
+    private static final String STATUS_APPROVED = "approved";
+    private static final String STATUS_PENDING = "pending";
+
     @Value("${app.image-storage-path:./uploads}")
     private String storagePath;
 
@@ -57,6 +60,7 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
             dto.setUploaderId(uploaderId);
             dto.setDownloadCount(0);
             dto.setDescription(description);
+            dto.setStatus(initialResourceStatus(uploaderId));
             dto.setCreateTime(new Date());
             if (this.save(dto)) {
                 return "上传成功";
@@ -72,10 +76,14 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
     public ResourceListVO listResources(int page, String category) {
         Page<ResourceDTO> pageQuery = new Page<>(page, 10);
         if (category != null && !category.isEmpty()) {
-            this.page(pageQuery, Wrappers.<ResourceDTO>query().eq("category", category)
+            this.page(pageQuery, Wrappers.<ResourceDTO>query()
+                    .eq("status", STATUS_APPROVED)
+                    .eq("category", category)
                     .orderByDesc("create_time"));
         } else {
-            this.page(pageQuery, Wrappers.<ResourceDTO>query().orderByDesc("create_time"));
+            this.page(pageQuery, Wrappers.<ResourceDTO>query()
+                    .eq("status", STATUS_APPROVED)
+                    .orderByDesc("create_time"));
         }
         List<ResourceVO> list = pageQuery.getRecords().stream().map(dto -> {
             AccountDTO account = accountMapper.selectById(dto.getUploaderId());
@@ -95,9 +103,9 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
     }
 
     @Override
-    public ResourceDTO downloadResource(int id, OutputStream stream) throws Exception {
+    public ResourceDTO downloadResource(int id, int uid, OutputStream stream) throws Exception {
         ResourceDTO dto = this.getById(id);
-        if (dto == null)
+        if (dto == null || !canAccessResource(dto, uid))
             return null;
         this.update(Wrappers.<ResourceDTO>update()
                 .setSql("download_count = download_count + 1")
@@ -109,6 +117,9 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
 
     @Override
     public void collectResource(int rid, int uid, boolean state) {
+        ResourceDTO resource = this.getById(rid);
+        if (resource == null) return;
+        if (state && !STATUS_APPROVED.equals(resource.getStatus())) return;
         if (state) {
             ((ResourceMapper) baseMapper).addCollect(rid, uid);
         } else {
@@ -175,5 +186,17 @@ public class ResourceServiceImpl extends ServiceImpl<ResourceMapper, ResourceDTO
             throw new SecurityException("非法文件路径");
         }
         return target;
+    }
+
+    private String initialResourceStatus(int uid) {
+        AccountDTO account = accountMapper.selectById(uid);
+        return account != null && "admin".equals(account.getRole()) ? STATUS_APPROVED : STATUS_PENDING;
+    }
+
+    private boolean canAccessResource(ResourceDTO dto, int uid) {
+        if (STATUS_APPROVED.equals(dto.getStatus())) return true;
+        if (dto.getUploaderId() != null && dto.getUploaderId() == uid) return true;
+        AccountDTO account = accountMapper.selectById(uid);
+        return account != null && "admin".equals(account.getRole());
     }
 }

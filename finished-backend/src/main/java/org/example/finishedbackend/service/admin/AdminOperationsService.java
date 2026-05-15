@@ -9,6 +9,8 @@ import org.example.finishedbackend.mapper.AccountMapper;
 import org.example.finishedbackend.mapper.FeedbackMapper;
 import org.example.finishedbackend.mapper.SensitiveWordMapper;
 import org.example.finishedbackend.service.*;
+import org.example.finishedbackend.utils.CacheUtils;
+import org.example.finishedbackend.utils.Const;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
@@ -21,6 +23,7 @@ import java.util.Set;
 public class AdminOperationsService {
 
     private static final Set<String> ASSIGNABLE_ROLES = Set.of("user", "content_admin", "moderator");
+    private static final Set<String> AUDIT_STATUSES = Set.of("pending", "approved", "rejected");
 
     @Resource
     AdminGuardService guard;
@@ -51,6 +54,9 @@ public class AdminOperationsService {
 
     @Resource
     AccountMapper accountMapper;
+
+    @Resource
+    CacheUtils cacheUtils;
 
     public RestBean<Map<String, Object>> users(int page, String keyword) {
         Page<AccountDTO> pageObj = new Page<>(page + 1, 10);
@@ -156,10 +162,13 @@ public class AdminOperationsService {
     }
 
     public RestBean<Void> auditTopic(int id, String status, int uid) {
+        String normalizedStatus = normalizeAuditStatus(status);
+        if (normalizedStatus == null) return RestBean.failure(400, "审核状态非法");
         TopicDTO topic = topicService.getById(id);
         if (topic == null) return RestBean.failure(404, "帖子不存在");
         if (!guard.canManageTopic(uid, topic)) return RestBean.failure(403, "无权操作此版块的帖子");
-        topicService.update(Wrappers.<TopicDTO>update().eq("id", id).set("status", status));
+        topicService.update(Wrappers.<TopicDTO>update().eq("id", id).set("status", normalizedStatus));
+        cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
         return RestBean.success(null, "审核状态已更新");
     }
 
@@ -261,20 +270,113 @@ public class AdminOperationsService {
         return RestBean.success(null, "日程已删除");
     }
 
-    public RestBean<Map<String, Object>> resources(int page, int uid) {
+    public RestBean<Map<String, Object>> resources(int page, String status, String keyword, int uid) {
         if (!guard.isAdmin(uid)) return RestBean.failure(403, "无权限");
         Page<ResourceDTO> pageObj = new Page<>(page + 1, 15);
-        resourceService.page(pageObj, Wrappers.<ResourceDTO>query().orderByDesc("create_time"));
+        var wrapper = Wrappers.<ResourceDTO>query();
+        String normalizedStatus = normalizeAuditStatus(status);
+        if (normalizedStatus != null) {
+            wrapper.eq("status", normalizedStatus);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = keyword.trim();
+            wrapper.and(q -> q.like("title", kw)
+                    .or()
+                    .like("file_name", kw)
+                    .or()
+                    .like("description", kw));
+        }
+        wrapper.last("ORDER BY FIELD(status, 'pending', 'rejected', 'approved'), create_time DESC");
+        resourceService.page(pageObj, wrapper);
+        List<Map<String, Object>> records = pageObj.getRecords().stream().map(this::resourceRecord).toList();
         Map<String, Object> result = new HashMap<>();
-        result.put("records", pageObj.getRecords());
+        result.put("records", records);
         result.put("total", pageObj.getTotal());
         return RestBean.success(result, null);
     }
 
     public RestBean<Void> deleteResource(int id, int uid) {
         if (!guard.isAdmin(uid)) return RestBean.failure(403, "无权限");
-        resourceService.removeById(id);
-        return RestBean.success(null, "资源已删除");
+        boolean deleted = resourceService.deleteResource(id, uid);
+        return deleted ? RestBean.success(null, "资源已删除") : RestBean.failure(404, "资源不存在");
+    }
+
+    public RestBean<Void> auditResource(int id, String status, String reason, int uid) {
+        if (!guard.isAdmin(uid)) return RestBean.failure(403, "无权限");
+        String normalizedStatus = normalizeAuditStatus(status);
+        if (normalizedStatus == null) return RestBean.failure(400, "审核状态非法");
+        ResourceDTO resource = resourceService.getById(id);
+        if (resource == null) return RestBean.failure(404, "资源不存在");
+        updateResourceAuditStatus(id, normalizedStatus, reason, uid);
+        return RestBean.success(null, "资源审核状态已更新");
+    }
+
+    public RestBean<Void> batchAuditResources(List<Integer> ids, String status, String reason, int uid) {
+        if (!guard.isAdmin(uid)) return RestBean.failure(403, "无权限");
+        if (ids == null || ids.isEmpty()) return RestBean.failure(400, "请选择资源");
+        String normalizedStatus = normalizeAuditStatus(status);
+        if (normalizedStatus == null) return RestBean.failure(400, "审核状态非法");
+        int updated = 0;
+        for (Integer id : ids) {
+            if (id == null || resourceService.getById(id) == null) continue;
+            updateResourceAuditStatus(id, normalizedStatus, reason, uid);
+            updated++;
+        }
+        return updated > 0 ? RestBean.success(null, "批量审核成功") : RestBean.failure(404, "资源不存在");
+    }
+
+    public RestBean<Void> batchDeleteResources(List<Integer> ids, int uid) {
+        if (!guard.isAdmin(uid)) return RestBean.failure(403, "无权限");
+        if (ids == null || ids.isEmpty()) return RestBean.failure(400, "请选择资源");
+        int deleted = 0;
+        for (Integer id : ids) {
+            if (id != null && resourceService.deleteResource(id, uid)) {
+                deleted++;
+            }
+        }
+        return deleted > 0 ? RestBean.success(null, "批量删除成功") : RestBean.failure(404, "资源不存在");
+    }
+
+    private void updateResourceAuditStatus(int id, String normalizedStatus, String reason, int uid) {
+        var update = Wrappers.<ResourceDTO>update()
+                .eq("id", id)
+                .set("status", normalizedStatus)
+                .set("auditor_id", uid)
+                .set("audit_time", new Date());
+        if ("rejected".equals(normalizedStatus)) {
+            update.set("reject_reason", reason == null || reason.isBlank() ? "内容不符合资源共享规范" : reason.trim());
+        } else {
+            update.set("reject_reason", null);
+        }
+        resourceService.update(update);
+    }
+
+    private String normalizeAuditStatus(String status) {
+        if (status == null) return null;
+        String normalized = status.trim();
+        return AUDIT_STATUSES.contains(normalized) ? normalized : null;
+    }
+
+    private Map<String, Object> resourceRecord(ResourceDTO resource) {
+        Map<String, Object> record = new HashMap<>();
+        record.put("id", resource.getId());
+        record.put("title", resource.getTitle());
+        record.put("category", resource.getCategory());
+        record.put("fileName", resource.getFileName());
+        record.put("fileSize", resource.getFileSize());
+        record.put("downloadCount", resource.getDownloadCount());
+        record.put("description", resource.getDescription());
+        record.put("uploaderId", resource.getUploaderId());
+        record.put("status", resource.getStatus());
+        record.put("rejectReason", resource.getRejectReason());
+        record.put("auditTime", resource.getAuditTime());
+        record.put("auditorId", resource.getAuditorId());
+        record.put("createTime", resource.getCreateTime());
+        AccountDTO uploader = accountMapper.selectById(resource.getUploaderId());
+        record.put("uploaderName", uploader != null ? uploader.getUsername() : "未知用户");
+        AccountDTO auditor = resource.getAuditorId() == null ? null : accountMapper.selectById(resource.getAuditorId());
+        record.put("auditorName", auditor != null ? auditor.getUsername() : null);
+        return record;
     }
 
     public RestBean<List<SensitiveWordDTO>> sensitiveWords(int uid) {

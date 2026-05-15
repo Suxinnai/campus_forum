@@ -24,7 +24,7 @@ public interface ResourceService extends IService<ResourceDTO> {
     /**
      * 下载资源（将文件流写入 OutputStream）
      */
-    ResourceDTO downloadResource(int id, OutputStream stream) throws Exception;
+    ResourceDTO downloadResource(int id, int uid, OutputStream stream) throws Exception;
 
     void collectResource(int rid, int uid, boolean state);
     boolean hasCollected(int rid, int uid);

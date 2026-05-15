@@ -67,7 +67,10 @@ public class AdminDashboardService {
     private List<Map<String, Object>> hotTopics() {
         List<Map<String, Object>> hotTopics = new ArrayList<>();
         List<TopicDTO> recentTopics = topicService.list(
-                Wrappers.<TopicDTO>query().orderByDesc("time").last("LIMIT 50"));
+                Wrappers.<TopicDTO>query()
+                        .eq("status", "approved")
+                        .orderByDesc("time")
+                        .last("LIMIT 50"));
         for (TopicDTO t : recentTopics) {
             Map<String, Object> item = new HashMap<>();
             item.put("id", t.getId());

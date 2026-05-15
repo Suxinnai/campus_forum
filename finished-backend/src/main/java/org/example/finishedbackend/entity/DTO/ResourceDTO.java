@@ -24,5 +24,9 @@ public class ResourceDTO {
     Integer uploaderId;
     Integer downloadCount;
     String description;
+    String status;
+    String rejectReason;
+    Integer auditorId;
+    Date auditTime;
     Date createTime;
 }

@@ -38,6 +38,9 @@ import java.util.stream.Collectors;
 @Service
 public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> implements TopicService {
 
+    private static final String STATUS_APPROVED = "approved";
+    private static final String STATUS_PENDING = "pending";
+
     @Resource
     TopicTypeMapper typeMapper;
 
@@ -86,21 +89,16 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "文章内容不能为空";
         if (!textLimitCheck(vo.getContent(), 20000))
             return "文章字数过多, 请稍后再试";
-        if (vo.getType() == 0) {
-            // tag系统替代分类后，type字段仅作兼容，默认取第一个有效分类
-            List<TopicTypeDTO> typeList = this.listTypes();
-            if (!typeList.isEmpty()) {
-                vo.setType(typeList.get(0).getId());
-            }
-        } else if (!types.contains(vo.getType()))
+        Integer type = resolveTopicType(vo.getType());
+        if (type == null)
             return "文章类型非法！";
         if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_CREATE_COUNTER + uid, 20, 3600))
             return "发文频繁, 请稍后再试";
         String forbiddenHit = forbiddenCheck(vo.getTitle() + " " + vo.getContent().toJSONString());
         if (forbiddenHit != null)
             return "内容包含违禁词汇【" + forbiddenHit + "】，请修改后再发布";
-        TopicDTO dto = new TopicDTO(0, vo.getTitle(), vo.getContent().toJSONString(), vo.getType(), new Date(), uid, 0,
-                "approved", 0);
+        TopicDTO dto = new TopicDTO(0, vo.getTitle(), vo.getContent().toJSONString(), type, new Date(), uid, 0,
+                initialTopicStatus(uid, type), 0);
         if (this.save(dto)) {
             cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
             return null;
@@ -115,8 +113,14 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "文章内容不能为空";
         if (!textLimitCheck(vo.getContent(), 20000))
             return "文章字数过多, 请稍后再试";
-        if (vo.getType() != 0 && !types.contains(vo.getType()))
+        Integer type = resolveTopicType(vo.getType());
+        if (type == null)
             return "文章类型非法！";
+        TopicDTO existing = baseMapper.selectById(vo.getId());
+        if (existing == null)
+            return "帖子不存在";
+        if (!Objects.equals(existing.getUid(), uid))
+            return "只能编辑自己发布的帖子";
         String forbiddenHit = forbiddenCheck(vo.getTitle() + " " + vo.getContent().toJSONString());
         if (forbiddenHit != null)
             return "内容包含违禁词汇【" + forbiddenHit + "】，请修改后再发布";
@@ -125,7 +129,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
                 .eq("id", vo.getId())
                 .set("title", vo.getTitle())
                 .set("content", vo.getContent().toString())
-                .set("type", vo.getType()));
+                .set("type", type)
+                .set("status", initialTopicStatus(uid, type)));
         cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
         return null;
     }
@@ -142,6 +147,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         TopicDTO topicDTO = baseMapper.selectById(vo.getTid());
         if (topicDTO == null)
             return "帖子不存在";
+        if (!isApprovedTopic(topicDTO))
+            return "帖子尚未通过审核，暂不能评论";
         AccountDTO accountDTO = accountMapper.selectById(uid);
         if (accountDTO == null)
             return "用户不存在";
@@ -181,6 +188,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     @Override
     public List<CommentVO> comments(int tid, int page) {
+        TopicDTO topic = baseMapper.selectById(tid);
+        if (topic == null || !isApprovedTopic(topic)) return List.of();
         Page<TopicCommentDTO> comments = Page.of(page + 1, 10);
         commentMapper.selectPage(comments, Wrappers.<TopicCommentDTO>query().eq("tid", tid));
         return comments.getRecords().stream().map(dto -> {
@@ -253,9 +262,11 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         }
         if (type == -2 || type == 0) {
             List<TopicDTO> pinned = baseMapper.selectList(Wrappers.<TopicDTO>query()
+                    .eq("status", STATUS_APPROVED)
                     .eq("top", 1)
                     .orderByDesc("time"));
             List<TopicDTO> normal = baseMapper.selectList(Wrappers.<TopicDTO>query()
+                    .eq("status", STATUS_APPROVED)
                     .eq("top", 0)
                     .orderByDesc("time"));
             List<TopicDTO> combined = new ArrayList<>(pinned.size() + normal.size());
@@ -263,7 +274,10 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             combined.addAll(normal);
             return combined;
         }
-        return baseMapper.selectList(Wrappers.<TopicDTO>query().eq("type", type).orderByDesc("time"));
+        return baseMapper.selectList(Wrappers.<TopicDTO>query()
+                .eq("status", STATUS_APPROVED)
+                .eq("type", type)
+                .orderByDesc("time"));
     }
 
     private List<List<TopicDTO>> splitByVisualCapacity(List<TopicDTO> candidates, int capacity) {
@@ -309,6 +323,7 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     public List<TopicPreviewVO> listTopicCollects(int uid) {
         return baseMapper.collectTopics(uid).stream()
                 .map(this::resolveToPreview)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
@@ -329,6 +344,7 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         TopicDetailVO vo = new TopicDetailVO();
         TopicDTO dto = baseMapper.selectById(tid);
         if (dto == null) return null;
+        if (!canViewTopic(dto, uid)) return null;
         BeanUtils.copyProperties(dto, vo);
         vo.setRawContent(dto.getContent());
         try {
@@ -368,6 +384,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     @Override
     public void interact(Interact interact, boolean state) {
         String type = interact.getType();
+        TopicDTO topic = baseMapper.selectById(interact.getTid());
+        if (topic == null || !isApprovedTopic(topic)) return;
         synchronized (type.intern()) {
             try {
                 template.opsForHash().put(type, interact.toKey(), Boolean.toString(state));
@@ -451,9 +469,8 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         if (keyword == null || keyword.isBlank()) return List.of();
         Page<TopicDTO> p = Page.of(page + 1, 10);
         baseMapper.selectPage(p, Wrappers.<TopicDTO>query()
-                .like("title", keyword)
-                .or()
-                .like("content", keyword)
+                .eq("status", STATUS_APPROVED)
+                .and(q -> q.like("title", keyword).or().like("content", keyword))
                 .orderByDesc("time"));
         if (p.getRecords().isEmpty()) return List.of();
         return p.getRecords().stream().map(this::resolveToPreview).collect(Collectors.toList());
@@ -462,8 +479,49 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     @Override
     public TopicPreviewVO resolvePreviewById(int tid) {
         TopicDTO dto = this.getById(tid);
-        if (dto == null) return null;
+        if (dto == null || !isApprovedTopic(dto)) return null;
         return resolveToPreview(dto);
+    }
+
+    private Integer resolveTopicType(Integer requestedType) {
+        if (requestedType == null || requestedType == 0) {
+            return this.listTypes().stream()
+                    .map(TopicTypeDTO::getId)
+                    .filter(id -> id != null && id > 0)
+                    .findFirst()
+                    .orElse(null);
+        }
+        return types.contains(requestedType) ? requestedType : null;
+    }
+
+    private String initialTopicStatus(int uid, int type) {
+        return canBypassTopicAudit(uid, type) ? STATUS_APPROVED : STATUS_PENDING;
+    }
+
+    private boolean canBypassTopicAudit(int uid, int type) {
+        AccountDTO account = accountMapper.selectById(uid);
+        if (account == null) return false;
+        String role = account.getRole();
+        if ("admin".equals(role) || "content_admin".equals(role)) return true;
+        return "moderator".equals(role)
+                && account.getModeratorType() != null
+                && account.getModeratorType().equals(type);
+    }
+
+    private boolean canViewTopic(TopicDTO topic, int uid) {
+        if (isApprovedTopic(topic)) return true;
+        if (Objects.equals(topic.getUid(), uid)) return true;
+        AccountDTO account = accountMapper.selectById(uid);
+        if (account == null) return false;
+        String role = account.getRole();
+        if ("admin".equals(role) || "content_admin".equals(role)) return true;
+        return "moderator".equals(role)
+                && account.getModeratorType() != null
+                && account.getModeratorType().equals(topic.getType());
+    }
+
+    private boolean isApprovedTopic(TopicDTO topic) {
+        return STATUS_APPROVED.equals(Optional.ofNullable(topic.getStatus()).orElse(STATUS_APPROVED));
     }
 
     private TopicPreviewVO resolveToPreview(TopicDTO dto) {

@@ -55,6 +55,7 @@ public interface TopicMapper extends BaseMapper<TopicDTO> {
     @Select("""
             select db_topic.* from db_topic_interact_collect left join db_topic on tid = db_topic.id
             where db_topic_interact_collect.uid = #{uid}
+              and db_topic.status = 'approved'
             """)
     List<TopicDTO> collectTopics(int uid);
 
@@ -81,6 +82,7 @@ public interface TopicMapper extends BaseMapper<TopicDTO> {
             left join (
                 select tid, count(*) comments from db_topic_comment group by tid
             ) c on c.tid = t.id
+            where t.status = 'approved'
             order by hot_score desc, t.time desc
             """)
     List<TopicDTO> selectHotTopics();
@@ -108,6 +110,7 @@ public interface TopicMapper extends BaseMapper<TopicDTO> {
             left join (
                 select tid, count(*) comments from db_topic_comment group by tid
             ) c on c.tid = t.id
+            where t.status = 'approved'
             order by hot_score desc, t.time desc
             limit #{limit}
             """)

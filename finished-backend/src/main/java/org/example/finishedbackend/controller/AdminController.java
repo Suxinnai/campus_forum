@@ -177,13 +177,37 @@ public class AdminController {
 
     @GetMapping("/resources")
     public RestBean<Map<String, Object>> resources(@RequestParam(defaultValue = "0") int page,
+                                                   @RequestParam(required = false) String status,
+                                                   @RequestParam(required = false) String keyword,
                                                    @RequestAttribute("id") int uid) {
-        return operationsService.resources(page, uid);
+        return operationsService.resources(page, status, keyword, uid);
     }
 
     @DeleteMapping("/resource/delete")
     public RestBean<Void> deleteResource(@RequestParam int id, @RequestAttribute("id") int uid) {
         return operationsService.deleteResource(id, uid);
+    }
+
+    @PostMapping("/resource/status")
+    public RestBean<Void> auditResource(@RequestParam int id,
+                                        @RequestParam String status,
+                                        @RequestParam(required = false) String reason,
+                                        @RequestAttribute("id") int uid) {
+        return operationsService.auditResource(id, status, reason, uid);
+    }
+
+    @PostMapping("/resource/batch-status")
+    public RestBean<Void> batchAuditResources(@RequestBody List<Integer> ids,
+                                              @RequestParam String status,
+                                              @RequestParam(required = false) String reason,
+                                              @RequestAttribute("id") int uid) {
+        return operationsService.batchAuditResources(ids, status, reason, uid);
+    }
+
+    @PostMapping("/resource/batch-delete")
+    public RestBean<Void> batchDeleteResources(@RequestBody List<Integer> ids,
+                                               @RequestAttribute("id") int uid) {
+        return operationsService.batchDeleteResources(ids, uid);
     }
 
     @GetMapping("/sensitive-words")
