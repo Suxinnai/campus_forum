@@ -1,0 +1,21 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f7fafc;
+}
+
+strong {
+  display: block;
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1.1;
+  margin-bottom: 8px;
+  white-space: nowrap;
+}
+
+span {
+  letter-spacing: 0;
+}
