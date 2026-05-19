@@ -1,0 +1,10 @@
+.git/
+.omx/
+campus-forum-demo-video/
+**/node_modules/
+**/target/
+**/dist/
+**/.env
+**/*.log
+redis/
+finished-backend/uploads/
