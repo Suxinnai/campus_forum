@@ -29,6 +29,7 @@ function deletePost(id) {
 function collectPost(tid) {
   post(`/api/forum/interact?tid=${tid}&type=collect&state=true`, null, () => {
     ElMessage.success({ message: '收藏成功', plain: true });
+    store.requestTopicListRefresh();
   });
 }
 
@@ -144,6 +145,15 @@ function hotMetric(item) {
 watch(() => topics.type, () => {
   resetList()
 }, { immediate: true })
+
+watch(() => store.forum.topicListRefreshVersion, () => {
+  if (topics.type === 0) {
+    resetList()
+  } else {
+    topics.type = 0
+  }
+  loadTopTopics()
+})
 
 onActivated(() => {
   if (topics.list.length > 0) {

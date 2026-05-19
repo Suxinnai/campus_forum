@@ -18,6 +18,7 @@ const store = useAppStore();
 const loading = ref(true);
 
 const topic = reactive({ data: null, like: false, collect: false, comments: [], page: 1 });
+const interacting = reactive({ like: false, collect: false });
 const tid = parseInt(route.params.tid); // 转化为数字，确保 @Min(1) 验证通过
 
 const commentText = ref("");
@@ -131,10 +132,32 @@ function safeLink(link) {
 
 // ======= 互动 =======
 function interact(type, message) {
-  post(`/api/forum/interact?tid=${tid}&type=${type}&state=${!topic[type]}`, null, () => {
-    ElMessage.success(`${message}成功`);
+  if (interacting[type]) return;
+  const nextState = !topic[type];
+  interacting[type] = true;
+  post(`/api/forum/interact?tid=${tid}&type=${type}&state=${nextState}`, null, () => {
+    topic[type] = nextState;
+    if (topic.data) {
+      const delta = nextState ? 1 : -1;
+      topic.data[type] = Math.max((topic.data[type] ?? 0) + delta, 0);
+    }
+    ElMessage.success(nextState ? `${message}成功` : `已取消${message}`);
+    store.requestTopicListRefresh();
     refreshTopicState(topic.page);
+    interacting[type] = false;
+  }, err => {
+    interacting[type] = false;
+    ElMessage.error(err || `${message}失败，请重试`);
+  }, err => {
+    interacting[type] = false;
+    ElMessage.error(err || `${message}失败，请重试`);
   });
+}
+
+function handleTopicSaved() {
+  edit.value = false;
+  store.requestTopicListRefresh();
+  init();
 }
 
 function deleteTopic() {
@@ -321,13 +344,13 @@ const displayTags  = computed(() => topic.data?.tags?.length ? topic.data.tags :
           <div class="interact-bar">
             <div class="interact-left">
               <!-- 点赞按钮 -->
-              <button class="ib-btn like-btn" :class="{active: topic.like}" @click="interact('like','点赞')">
+              <button class="ib-btn like-btn" :class="{active: topic.like}" :disabled="interacting.like" @click="interact('like','点赞')">
                 <ThumbsUp :size="15" :fill="topic.like ? 'currentColor' : 'none'"/>
                 <span>点赞</span>
                 <b class="ib-count">{{ likeCount }}</b>
               </button>
               <!-- 收藏按钮 -->
-              <button class="ib-btn collect-btn" :class="{active: topic.collect}" @click="interact('collect','收藏')">
+              <button class="ib-btn collect-btn" :class="{active: topic.collect}" :disabled="interacting.collect" @click="interact('collect','收藏')">
                 <Star :size="15" :fill="topic.collect ? 'currentColor' : 'none'"/>
                 <span>{{ topic.collect ? '已收藏' : '收藏' }}</span>
                 <b class="ib-count">{{ collectCount }}</b>
@@ -453,6 +476,7 @@ const displayTags  = computed(() => topic.data?.tags?.length ? topic.data.tags :
       :default-title="topic.data.title"
       :default-type="topic.data.type"
       @close="edit = false; init()"
+      @success="handleTopicSaved"
       :tid="String(tid)"
     />
   </div>
@@ -576,6 +600,7 @@ const displayTags  = computed(() => topic.data?.tags?.length ? topic.data.tags :
   user-select: none;
 
   &:hover { border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-9); color: var(--el-color-primary); }
+  &:disabled { opacity: 0.65; cursor: wait; }
 
   &.like-btn.active {
     background: #eff6ff; color: #2563eb; border-color: #93c5fd;

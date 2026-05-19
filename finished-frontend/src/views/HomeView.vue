@@ -116,6 +116,14 @@ function closeSearchPanel() {
   setTimeout(() => { showSearchPanel.value = false }, 200)
 }
 
+function handleTopicEditorSuccess() {
+  editor.value = false
+  store.requestTopicListRefresh()
+  if (router.currentRoute.value.path !== '/home') {
+    router.push('/home')
+  }
+}
+
 </script>
 
 <template>
@@ -289,7 +297,7 @@ function closeSearchPanel() {
       </el-scrollbar>
     </main>
 
-    <TopicEditor :show="editor" @success="() => { editor = false; router.push('/home'); }" @close="editor = false" />
+    <TopicEditor :show="editor" @success="handleTopicEditorSuccess" @close="editor = false" />
   </div>
 </template>
 

@@ -91,7 +91,7 @@ const submitTopic = () => {
       title: editor.title,
       content: payloadObj
     }, () => {
-      ElMessage.success({message:"文章已提交", plain:true})
+      ElMessage.success({message:"文章发布成功", plain:true})
       emit('success')
     })
   } else {
@@ -101,7 +101,7 @@ const submitTopic = () => {
       title: editor.title,
       content: payloadObj
     }, () => {
-      ElMessage.success({message:"文章已更新并提交", plain:true})
+      ElMessage.success({message:"文章更新成功", plain:true})
       emit('success')
     })
   }

@@ -13,7 +13,8 @@ import '@/assets/design-system.less'
 
 import axios from "axios";
 
-axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080"
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL
+axios.defaults.baseURL = apiBaseURL === undefined ? "http://localhost:8080" : apiBaseURL
 
 const app = createApp(App)
 

@@ -13,8 +13,12 @@ export const useAppStore = defineStore('app', () => {
   })
   const forum = reactive({
     types: [],
-    _typesLoaded: false
+    _typesLoaded: false,
+    topicListRefreshVersion: 0
   })
+  function requestTopicListRefresh() {
+    forum.topicListRefreshVersion += 1
+  }
   function findTypeById(id) {
     for (let type of forum.types) {
       if (type.id === id)  {
@@ -60,5 +64,5 @@ export const useAppStore = defineStore('app', () => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
   };
 
-  return { user, forum, geo, findTypeById, findTypeByName, getAvatar, loadGeo}
+  return { user, forum, geo, findTypeById, findTypeByName, requestTopicListRefresh, getAvatar, loadGeo}
 })

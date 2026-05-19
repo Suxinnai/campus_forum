@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { get, post, put, del } from '@/net/api.js'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAppStore } from '@/stores/app-store.js'
@@ -28,7 +28,7 @@ const isModerator = computed(() => myRole.value === 'moderator')
 const canManageTopics = computed(() => isAdmin.value || isContentAdmin.value || isModerator.value)
 
 // ===================== 状态 =====================
-const activeTab = ref('topics')
+const activeTab = ref('overview')
 const stats = reactive({ users: 0, topics: 0, comments: 0, todayPosts: 0, sensitiveWords: 0, todayRegistered: 0, todayActive: 0, hotTopics: [], dailyPosts: [], categoryDistribution: [] })
 
 const lineChartOption = computed(() => createLineChartOption(stats.dailyPosts || []))
@@ -136,6 +136,15 @@ const navItems = computed(() => {
 const currentNavLabel = computed(() => {
   const item = navItems.value.find(n => n.key === activeTab.value)
   return item ? item.label : ''
+})
+
+function isTabAvailable(tab) {
+  return navItems.value.some(item => item.key === tab)
+}
+
+watch(myRole, role => {
+  if (!role || isTabAvailable(activeTab.value)) return
+  switchTab(navItems.value[0]?.key || 'topics')
 })
 
 // ===================== 数据加载 =====================

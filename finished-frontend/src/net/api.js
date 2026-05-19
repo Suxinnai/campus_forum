@@ -3,7 +3,8 @@ import { ElMessage } from "element-plus";
 import router from "@/router/index.js";
 
 // ===== 统一 API 基础地址（从 Vite 环境变量读取） =====
-const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL
+const baseURL = apiBaseURL === undefined ? "http://localhost:8080" : apiBaseURL;
 
 const tokenAndExpire = "tokenAndExpire"
 
@@ -71,10 +72,10 @@ const doPost = (url, data, header, success, failure = defaultFailure, error = de
     })
 }
 
-const post = (url, data, success, failure = defaultFailure) => {
+const post = (url, data, success, failure = defaultFailure, error = defaultError) => {
     doPost(url, data, {
         "Authorization": `Bearer ${getToken()}`,
-    }, success, failure)
+    }, success, failure, error)
 }
 
 const put = (url, data, success, failure = defaultFailure, error = defaultError) => {
