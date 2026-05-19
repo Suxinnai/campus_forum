@@ -20,9 +20,11 @@ import org.example.finishedbackend.mapper.*;
 import org.example.finishedbackend.service.NotificationService;
 import org.example.finishedbackend.service.TopicService;
 import org.example.finishedbackend.service.filter.ContentFilter;
+import org.example.finishedbackend.service.filter.FilterResult;
 import org.example.finishedbackend.utils.CacheUtils;
 import org.example.finishedbackend.utils.Const;
 import org.example.finishedbackend.utils.FlowUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -36,6 +38,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> implements TopicService {
 
     private static final String STATUS_APPROVED = "approved";
@@ -94,10 +97,13 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "文章类型非法！";
         if (!flowUtils.limitPeriodCounterCheck(Const.FORUM_TOPIC_CREATE_COUNTER + uid, 20, 3600))
             return "发文频繁, 请稍后再试";
-        String forbiddenHit = forbiddenCheck(vo.getTitle() + " " + vo.getContent().toJSONString());
-        if (forbiddenHit != null)
-            return "内容包含违禁词汇【" + forbiddenHit + "】，请修改后再发布";
-        TopicDTO dto = new TopicDTO(0, vo.getTitle(), vo.getContent().toJSONString(), type, new Date(), uid, 0,
+        FilterResult titleFilter = filterText(vo.getTitle());
+        String rawContent = vo.getContent().toJSONString();
+        FilterResult contentFilterResult = filterText(rawContent);
+        String filterError = topicFilterError(titleFilter, vo.getTitle(), contentFilterResult, rawContent, "发布");
+        if (filterError != null)
+            return filterError;
+        TopicDTO dto = new TopicDTO(0, vo.getTitle(), rawContent, type, new Date(), uid, 0,
                 initialTopicStatus(uid, type), 0);
         if (this.save(dto)) {
             cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
@@ -121,14 +127,17 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "帖子不存在";
         if (!Objects.equals(existing.getUid(), uid))
             return "只能编辑自己发布的帖子";
-        String forbiddenHit = forbiddenCheck(vo.getTitle() + " " + vo.getContent().toJSONString());
-        if (forbiddenHit != null)
-            return "内容包含违禁词汇【" + forbiddenHit + "】，请修改后再发布";
+        FilterResult titleFilter = filterText(vo.getTitle());
+        String rawContent = vo.getContent().toJSONString();
+        FilterResult contentFilterResult = filterText(rawContent);
+        String filterError = topicFilterError(titleFilter, vo.getTitle(), contentFilterResult, rawContent, "发布");
+        if (filterError != null)
+            return filterError;
         baseMapper.update(null, Wrappers.<TopicDTO>update()
                 .eq("uid", uid)
                 .eq("id", vo.getId())
                 .set("title", vo.getTitle())
-                .set("content", vo.getContent().toString())
+                .set("content", rawContent)
                 .set("type", type)
                 .set("status", initialTopicStatus(uid, type)));
         cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
@@ -141,9 +150,11 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
             return "发表评论频繁, 请稍后再试";
         if (!textLimitCheck(JSONObject.parseObject(vo.getContent()), 2000))
             return "评论内容字数过多, 请重新编辑";
-        String forbiddenHit = forbiddenCheck(vo.getContent());
-        if (forbiddenHit != null)
-            return "评论包含违禁词汇【" + forbiddenHit + "】，请修改后再提交";
+        FilterResult commentFilter = filterText(vo.getContent());
+        if (!commentFilter.isPassed())
+            return "评论包含违禁词汇【" + commentFilter.getForbiddenWord() + "】，请修改后再提交";
+        if (hasSensitiveWord(commentFilter, vo.getContent()))
+            return "评论包含敏感词汇，请修改后再提交";
         TopicDTO topicDTO = baseMapper.selectById(vo.getTid());
         if (topicDTO == null)
             return "帖子不存在";
@@ -178,12 +189,30 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
         return null;
     }
 
-    private String forbiddenCheck(String text) {
+    private FilterResult filterText(String text) {
         try {
-            return contentFilter.checkForbiddenWords(text);
+            return contentFilter.filter(text);
         } catch (Exception e) {
-            return null;
+            log.warn("内容过滤失败，已按原文继续处理", e);
+            return new FilterResult(true, null, text);
         }
+    }
+
+    private String topicFilterError(FilterResult titleFilter, String title,
+                                    FilterResult contentFilterResult, String content, String action) {
+        if (!titleFilter.isPassed())
+            return "标题包含违禁词汇【" + titleFilter.getForbiddenWord() + "】，请修改后再" + action;
+        if (hasSensitiveWord(titleFilter, title))
+            return "标题包含敏感词汇，请修改后再" + action;
+        if (!contentFilterResult.isPassed())
+            return "内容包含违禁词汇【" + contentFilterResult.getForbiddenWord() + "】，请修改后再" + action;
+        if (hasSensitiveWord(contentFilterResult, content))
+            return "内容包含敏感词汇，请修改后再" + action;
+        return null;
+    }
+
+    private boolean hasSensitiveWord(FilterResult result, String original) {
+        return result.getFilteredContent() != null && !Objects.equals(result.getFilteredContent(), original);
     }
 
     @Override
@@ -392,11 +421,19 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
                 cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
                 this.saveInteractSchedule(type);
             } catch (Exception e) {
-                // Redis 失败，直接同步到数据库（可选，或者直接报错）
-                // 这里为了稳健，如果交互失败，我们可以抛出异常让用户重试
-                // 但为了不让页面崩溃，我们暂不处理，等待下次同步
+                log.warn("Redis 互动缓存不可用，直接写入数据库: type={}, tid={}, uid={}", type, interact.getTid(), interact.getUid());
+                applyInteractToDatabase(interact, state);
             }
         }
+    }
+
+    private void applyInteractToDatabase(Interact interact, boolean state) {
+        if (state) {
+            baseMapper.addInteract(List.of(interact), interact.getType());
+        } else {
+            baseMapper.deleteInteract(List.of(interact), interact.getType());
+        }
+        cacheUtils.deleteCachePattern(Const.FORUM_TOPIC_PREVIEW_CACHE + "*");
     }
 
     private final Map<String, Boolean> map = new HashMap<>();
@@ -414,19 +451,23 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
 
     private void saveInteract(String type) {
         synchronized (type.intern()) {
-            List<Interact> check = new LinkedList<>();
-            List<Interact> uncheck = new LinkedList<>();
-            template.opsForHash().entries(type).forEach((k, v) -> {
-                if (Boolean.parseBoolean(v.toString()))
-                    check.add(Interact.parseInteract(k.toString(), type));
-                else
-                    uncheck.add(Interact.parseInteract(k.toString(), type));
-            });
-            if (!check.isEmpty())
-                baseMapper.addInteract(check, type);
-            if (!uncheck.isEmpty())
-                baseMapper.deleteInteract(uncheck, type);
-            template.delete(type);
+            try {
+                List<Interact> check = new LinkedList<>();
+                List<Interact> uncheck = new LinkedList<>();
+                template.opsForHash().entries(type).forEach((k, v) -> {
+                    if (Boolean.parseBoolean(v.toString()))
+                        check.add(Interact.parseInteract(k.toString(), type));
+                    else
+                        uncheck.add(Interact.parseInteract(k.toString(), type));
+                });
+                if (!check.isEmpty())
+                    baseMapper.addInteract(check, type);
+                if (!uncheck.isEmpty())
+                    baseMapper.deleteInteract(uncheck, type);
+                template.delete(type);
+            } catch (Exception e) {
+                log.warn("Redis 互动缓存同步失败，将等待后续请求重新触发: type={}", type);
+            }
         }
     }
 
@@ -495,7 +536,7 @@ public class TopicServiceImpl extends ServiceImpl<TopicMapper, TopicDTO> impleme
     }
 
     private String initialTopicStatus(int uid, int type) {
-        return canBypassTopicAudit(uid, type) ? STATUS_APPROVED : STATUS_PENDING;
+        return STATUS_APPROVED;
     }
 
     private boolean canBypassTopicAudit(int uid, int type) {
